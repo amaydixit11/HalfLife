@@ -97,35 +97,52 @@ class Reranker:
 
             cache_key = f"{chunk_id}:{intent or 'none'}"
             cached    = self.store.get_cached_score(cache_key)
+        start_compute = datetime.now()
+        raw_results = []
+        for r in chunks:
+            chunk_id     = r.get("id")
+            payload      = r.get("payload", {})
+            vector_score = r.get("score")
+            trust_score  = 0.5  # ROBUSTNESS: Default initialization
             
-            if cached is not None:
-                raw_results.append({
-                    "id": chunk_id, "final": cached, "v": vector_score, "t": None, "tr": 0.5, "p": payload, "cached": True
-                })
-                continue
-            
-            # Metadata & Decay computation
-            metadata = self.store.get_chunk(chunk_id)
-            ts = self._parse_timestamp(payload.get("timestamp"), chunk_id, now)
-            
-            if metadata:
-                decay_fn = get_decay(metadata.get("decay_type", "exponential"), metadata.get("decay_params", {}))
-                trust_score = metadata.get("trust_score", 0.5)
+            # --- ROBUSTNESS: Metadata & Intent Handling ---
+            raw_ts = payload.get("timestamp")
+            if not raw_ts:
+                # Missing TS -> Neutral decay (0.5) to prevent unfair recency bias
+                ts = None 
+                temporal = 0.5
             else:
-                decay_fn = get_decay("exponential", {})
-                trust_score = 0.5
+                ts = self._parse_timestamp(raw_ts, chunk_id, now)
+                
+                # Metadata-driven decay selection
+                metadata = self.store.get_chunk(chunk_id)
+                d_type   = metadata.get("decay_type", "exponential") if metadata else "exponential"
+                d_params = metadata.get("decay_params", {}) if metadata else {}
+                trust_score = metadata.get("trust_score", 0.5) if metadata else 0.5
+                
+                # --- RESEARCH: Support Neural Lambda Overrides ---
+                # Used by the 'learned_lambda' ablation variant
+                if "lambda" in weights:
+                    d_params = {"lambda": weights["lambda"]}
 
-            temporal = decay_fn.compute(timestamp=ts, now=now)
+                decay_fn = get_decay(d_type, d_params)
+                temporal = decay_fn.compute(timestamp=ts, now=now)
+                
+            # Intent Inversion logic
             if intent == "historical":
                 temporal = 1.0 - temporal
             
             raw_results.append({
-                "id": chunk_id, "v": vector_score, "t": temporal, "tr": trust_score, "p": payload, "cached": False, "key": cache_key
+                "id": chunk_id, "v": vector_score, "t": temporal, "tr": trust_score, "p": payload, "ts": ts
             })
 
-        # 2. Second pass: Min-Max Normalization (only for non-cached results)
-        v_scores = [r["v"] for r in raw_results if not r.get("cached")]
-        t_scores = [r["t"] for r in raw_results if not r.get("cached")]
+        # --- Latency Tracking ---
+        compute_ms = (datetime.now() - start_compute).total_seconds() * 1000
+        logger.debug(f"Fusion batch for {len(chunks)} chunks took {compute_ms:.2f}ms")
+
+        # 2. Second pass: Min-Max Normalization
+        v_scores = [r["v"] for r in raw_results]
+        t_scores = [r["t"] for r in raw_results]
         
         def norm(val, vals):
             if not vals or max(vals) == min(vals): return 0.5
@@ -133,29 +150,20 @@ class Reranker:
 
         final_chunks = []
         for r in raw_results:
-            if r.get("cached"):
-                final_score = r["final"]
-            else:
-                # Weighted fusion on normalized signals
-                vn = norm(r["v"], v_scores)
-                tn = norm(r["t"], t_scores)
-                
-                final_score = (
-                    weights["vector"]   * vn +
-                    weights["temporal"] * tn +
-                    weights["trust"]    * r["tr"]
-                )
-                self.store.set_cached_score(r["key"], final_score)
+            # Weighted fusion on normalized signals
+            vn = norm(r["v"], v_scores)
+            tn = norm(r["t"], t_scores)
             
+            final_score = (weights["vector"] * vn + weights["temporal"] * tn + weights["trust"] * r["tr"])
+
             final_chunks.append({
                 "id":             r["id"],
                 "final_score":    round(final_score, 6),
                 "vector_score":   round(r["v"], 6),
-                "temporal_score": round(r["t"], 6) if r["t"] is not None else None,
+                "temporal_score": round(r["t"], 10), # Precision for debug
                 "trust_score":    round(r["tr"], 6),
                 "timestamp":      r["p"].get("timestamp"),
-                "doc_type":       r["p"].get("doc_type"),
-                "cache_hit":      r.get("cached", False),
+                "text":           r["p"].get("text", "---"),
             })
 
         final_chunks.sort(key=lambda x: x["final_score"], reverse=True)
