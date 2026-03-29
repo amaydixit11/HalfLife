@@ -1,172 +1,100 @@
 # HalfLife
 
-**Temporal decay–aware reranking of retrieved chunks via relevance half-life modeling**
+**Temporal-Aware Chunk Re-Ranking Engine for Retrieval-Augmented Generation (RAG)**
+
+HalfLife is a plug-and-play middleware that enhances any RAG pipeline by re-ranking retrieved chunks using **temporal signals**, **decay functions**, and **multi-factor scoring**.
+
+Instead of relying solely on semantic similarity, HalfLife introduces a **time-aware ranking layer** that improves freshness, relevance, and contextual correctness in generated responses.
 
 ---
 
-## 🧠 Overview
+## ✨ Why HalfLife?
 
-**HalfLife** is a middleware layer for retrieval-augmented systems that models **relevance as a time-dependent signal**. Instead of treating retrieved chunks as equally valid regardless of age, HalfLife applies **per-chunk temporal decay functions** to dynamically adjust their importance during reranking.
+Traditional RAG systems rank documents using:
 
-Modern RAG pipelines rely heavily on semantic similarity, but ignore a critical dimension: **time**. In real-world systems, information evolves, becomes outdated, or gains importance depending on context. HalfLife introduces **half-life parameterization** to explicitly model how relevance changes over time.
-
----
-
-## ⚡ Key Idea
-
-Traditional retrieval assumes:
-
-> relevance = semantic similarity
+```
+relevance ≈ semantic similarity(query, document)
+```
 
 HalfLife extends this to:
 
-> relevance = f(semantic similarity, temporal decay, trust signals)
-
-Each chunk is assigned a **half-life**, defining how quickly its relevance decays. This enables:
-
-* Fast-decaying content (e.g., news)
-* Slow-decaying content (e.g., documentation)
-* Persistent knowledge (e.g., fundamentals)
-
----
-
-## 🏗️ Architecture
-
 ```
-User Query
-   ↓
-Vector Retriever (Qdrant / FAISS / etc.)
-   ↓
-Retrieved Chunks (with similarity scores)
-   ↓
-HalfLife Middleware
-   ├── Temporal Decay Engine
-   ├── Metadata Store (timestamps, half-life params)
-   ├── Fusion Layer (multi-signal scoring)
-   ↓
-Re-ranked Chunks
-   ↓
-LLM / Downstream System
+relevance = f(semantic_similarity, temporal_decay, trust, priors)
 ```
 
----
+This enables:
 
-## 🔌 Core Features
-
-### ⏳ Temporal Decay Modeling
-
-* Explicit **half-life functions** per chunk
-* Supports:
-
-  * Exponential decay
-  * Piecewise decay
-  * Custom / learned decay
+* Better handling of **time-sensitive queries**
+* Reduced reliance on **outdated information**
+* Improved **context diversity across time**
+* More **robust and explainable retrieval pipelines**
 
 ---
 
-### 🧩 Chunk-Level Scoring
+## 🧠 Core Idea
 
-* Operates at **fine granularity**
-* Each chunk has:
+HalfLife sits between your retriever (e.g., Qdrant) and your LLM:
 
-  * timestamp
-  * decay parameters
-  * optional trust score
+```
+Retriever → HalfLife → LLM
+```
+
+It **re-scores and reorders chunks** before they are passed into the model.
 
 ---
 
-### ⚖️ Multi-Signal Fusion
+## ⚙️ Core Features
 
-Combines:
+### 🔍 1. Chunk Re-Ranking Engine
 
-* semantic similarity (from retriever)
-* temporal decay score
-* trust / prior signals
+Drop-in function:
 
 ```python
-final_score = α * similarity + β * decay + γ * trust
-```
-
----
-
-### 🔄 Drop-in Middleware
-
-* Works with any vector store:
-
-  * Qdrant
-  * Pinecone
-  * Weaviate
-  * FAISS
-* No changes to existing retrieval pipelines
-
----
-
-### ⚡ Low Latency
-
-* Redis-backed metadata store
-* Precomputed parameters
-* Designed for real-time reranking
-
----
-
-## 🧪 Example Usage
-
-```python
-results = qdrant.search(query_embedding)
-
-reranked = engine.rerank(
+results = engine.rerank(
     query="latest transformer architectures",
-    chunks=results,
-    top_k=5
+    chunks=[
+        {"id": "1", "score": 0.82},
+        {"id": "2", "score": 0.78}
+    ],
+    top_k=10
 )
 ```
 
-### Output
+Returns:
 
 ```json
 [
   {
-    "id": "chunk_1",
+    "id": "1",
     "final_score": 0.91,
     "vector_score": 0.82,
     "temporal_score": 0.76,
-    "trust_score": 0.65
+    "trust_score": 0.6
   }
 ]
 ```
 
 ---
 
-## 🧠 Decay Modeling
+### ⏳ 2. Temporal Decay Engine
 
-### Half-Life Definition
+Supports multiple decay strategies:
 
-Each chunk is assigned:
+* **Exponential decay**
+* **Piecewise decay**
+* **(Planned) Learned decay**
 
-```python
-chunk.half_life = 7 * 24 * 3600  # seconds
+Example:
+
+```
+decay(Δt) = e^(-λΔt)
 ```
 
-Decay function:
-
-[
-score = e^{-\lambda t}, \quad \lambda = \frac{\ln 2}{half_life}
-]
+Each chunk can have its own decay configuration.
 
 ---
 
-### Interpretation
-
-| Content Type | Half-Life    | Behavior       |
-| ------------ | ------------ | -------------- |
-| News         | Hours–Days   | Fast decay     |
-| Blogs        | Weeks        | Moderate decay |
-| Docs         | Months–Years | Slow decay     |
-| Fundamentals | Years        | Near-static    |
-
----
-
-## 🗂️ Metadata Schema
+### 🗂️ 3. Chunk-Level Metadata
 
 Each chunk stores:
 
@@ -174,109 +102,205 @@ Each chunk stores:
 {
   "chunk_id": "abc123",
   "timestamp": "2024-01-01T00:00:00",
-  "half_life": 604800,
   "decay_type": "exponential",
-  "trust_score": 0.8,
-  "doc_type": "news"
+  "decay_params": {"lambda": 0.000001},
+  "trust_score": 0.8
 }
 ```
 
+Stored in a fast-access store (Redis).
+
 ---
 
-## 🔧 Installation
+### ⚖️ 4. Multi-Factor Scoring
+
+Final score is computed as:
+
+```
+final_score = α * vector_score + β * temporal_score + γ * trust_score
+```
+
+Weights are configurable and will later support **adaptive tuning**.
+
+---
+
+### 🔌 5. Drop-in Middleware API
+
+HalfLife integrates with any vector database:
+
+* Qdrant
+* Pinecone
+* Weaviate
+* FAISS
+* pgvector
+
+Example flow:
+
+```python
+results = qdrant.search(query_embedding)
+
+reranked = engine.rerank(
+    query=query,
+    chunks=results
+)
+```
+
+---
+
+### ⚡ 6. Low-Latency Design
+
+* Redis-backed metadata
+* No heavy recomputation at query time
+* Designed for real-time inference pipelines
+
+---
+
+## 🏗️ Architecture
+
+```
+User Query
+    ↓
+Vector Retrieval (Qdrant)
+    ↓
+HalfLife Engine
+    ├── Temporal Scoring (Decay)
+    ├── Metadata Fetch (Redis)
+    ├── Score Fusion
+    ↓
+Re-ranked Chunks
+    ↓
+LLM
+```
+
+---
+
+## 📁 Project Structure
+
+```
+temporal-rag-engine/
+├── engine/
+│   ├── decay/          # Decay functions (exponential, piecewise, etc.)
+│   ├── classifier/     # Document-type classification (future)
+│   ├── store/          # Redis metadata store
+│   ├── fusion/         # Reranking logic
+│   ├── feedback/       # Online updates (future)
+│   ├── events/         # Event-driven invalidation (future)
+│   └── ingestion/      # Data ingestion pipeline
+│
+├── api/                # FastAPI interface
+├── tests/
+└── docker-compose.yml
+```
+
+---
+
+## 🚀 Getting Started
+
+### 1. Clone the repo
 
 ```bash
-git clone https://github.com/yourusername/halflife
+git clone https://github.com/yourusername/halflife.git
 cd halflife
-pip install -r requirements.txt
 ```
 
 ---
 
-## 🐳 Running with Docker
+### 2. Start services
 
 ```bash
-docker-compose up
+docker-compose up -d
 ```
 
-Includes:
+Services:
 
 * Qdrant
 * Redis
-* FastAPI service
+* FastAPI server
 
 ---
 
-## 🚀 API
+### 3. Run API
 
-### `POST /rerank`
+```bash
+uvicorn api.main:app --reload
+```
 
-#### Request
+---
+
+### 4. Example Request
+
+```bash
+POST /rerank
+```
 
 ```json
 {
-  "query": "...",
-  "chunks": [...],
-  "top_k": 10
+  "query": "latest advancements in GNNs",
+  "chunks": [
+    {"id": "1", "score": 0.85},
+    {"id": "2", "score": 0.80}
+  ],
+  "top_k": 5
 }
-```
-
-#### Response
-
-```json
-[
-  {
-    "id": "...",
-    "final_score": 0.87,
-    "vector_score": 0.91,
-    "temporal_score": 0.72
-  }
-]
 ```
 
 ---
 
-## 🧪 Evaluation
+## 🧪 Evaluation (Planned)
 
 HalfLife introduces new evaluation dimensions:
 
 * **Temporal Relevance**
-  Does the system prioritize appropriate time-sensitive content?
-
 * **Freshness Sensitivity**
-  Does ranking adapt to query intent (latest vs general)?
-
 * **Temporal Diversity**
-  Does context include multiple time horizons?
+* **Groundedness over time**
 
 ---
 
-## 🔮 Roadmap
+## 🧩 Roadmap
 
-* [ ] Query intent classifier (fresh vs static)
-* [ ] Learned decay functions (neural parameterization)
-* [ ] Feedback-driven half-life tuning
+### Phase 1 (MVP)
+
+* [x] Decay engine
+* [x] Redis metadata store
+* [x] Reranking API
+* [x] Qdrant integration
+
+### Phase 2
+
+* [ ] Query temporal intent classifier
+* [ ] Adaptive weighting (α, β, γ)
+* [ ] Feedback-driven decay tuning
+
+### Phase 3
+
+* [ ] Event-driven updates
 * [ ] Temporal knowledge graphs
-* [ ] Evaluation framework + benchmarks
+* [ ] Learned decay models
 
 ---
 
-## 🧠 Design Principles
+## 🔬 Research Directions
 
-* **Time is a first-class signal**
-* **Relevance is not static**
-* **Retrieval needs correction, not replacement**
-* **Systems should be modular and composable**
+HalfLife opens up exploration in:
+
+* Temporal ranking in IR systems
+* Learned decay functions
+* Time-aware embeddings
+* Adaptive retrieval policies
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome. Please open issues or submit PRs for:
+Contributions are welcome!
 
-* new decay functions
-* evaluation methods
-* integrations
+Ideas:
+
+* New decay functions
+* Better fusion strategies
+* Evaluation benchmarks
+* Dataset integrations
 
 ---
 
@@ -286,8 +310,18 @@ MIT License
 
 ---
 
-## 📌 Summary
+## 🧠 Philosophy
 
-HalfLife redefines retrieval by introducing **time-aware relevance modeling**. By treating relevance as a decaying signal rather than a static score, it enables more accurate, adaptive, and context-aware reranking in modern RAG systems.
+HalfLife is built on a simple idea:
 
-> Relevance decays. Your retrieval should too.
+> Not all knowledge ages the same way.
+
+Understanding *when* information matters is as important as understanding *what* it says.
+
+---
+
+## ⭐ Support
+
+If you find this project useful, consider starring the repo.
+
+---
