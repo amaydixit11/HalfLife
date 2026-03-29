@@ -36,7 +36,8 @@ import sys
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import List, Dict
+from typing import List, Dict, Optional
+
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -121,6 +122,7 @@ def temporal_freshness(
 def ingest_corpus(
     chunks: List[CorpusChunk],
     ingestor: HalfLifeIngestor,
+    ingestor_decay_type: Optional[str] = None,
 ) -> Dict[str, str]:
     """
     Ingest benchmark corpus. Returns mapping of corpus chunk_id → Qdrant chunk_id.
@@ -134,6 +136,7 @@ def ingest_corpus(
             timestamp=chunk.timestamp,
             source_domain=chunk.source_domain,
             doc_type=chunk.doc_type,
+            decay_type=ingestor_decay_type,
         )
         # We need to remap: the ingestor generates a new uuid, but our
         # ground truth uses corpus chunk_ids. Store the mapping.
@@ -365,6 +368,7 @@ def main():
     parser.add_argument("--output", type=str, default=None)
     parser.add_argument("--qdrant-url", default="http://localhost:6333")
     parser.add_argument("--redis-url",  default="redis://localhost:6379")
+    parser.add_argument("--decay-type", default=None, help="Force a decay type (e.g. learned)")
     args = parser.parse_args()
 
     # ---- Build corpus ---------------------------------------------------
@@ -386,7 +390,7 @@ def main():
             qdrant_url=args.qdrant_url,
             redis_url=args.redis_url,
         )
-        id_map = ingest_corpus(chunks, ingestor)
+        id_map = ingest_corpus(chunks, ingestor, ingestor_decay_type=args.decay_type)
     else:
         logger.info("Skipping ingest — recovering id_map from Qdrant...")
         id_map = _recover_id_map(qdrant, chunks)

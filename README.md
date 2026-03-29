@@ -45,113 +45,19 @@ It **re-scores and reorders chunks** before they are passed into the model.
 
 ## ⚙️ Core Features
 
-### 🔍 1. Chunk Re-Ranking Engine
+### 🔍 1. Plug-and-Play Reranking
+HalfLife sits between your retriever (e.g., Qdrant) and your LLM. It **re-scores and reorders chunks** before they reach the model.
 
-Drop-in function:
+### ⏳ 2. Multi-Strategy Decay
+Supports modular decay functions via a central registry:
+*   **Exponential**: Standard time-based decay.
+*   **Piecewise**: Different decay rates for recent vs. historical windows.
+*   **Learned (NEW)**: Features a pure-NumPy MLP (`DecayMLP`) that predicts the optimal $\lambda$ at ingestion time based on document type, source, and feedback.
 
-```python
-results = engine.rerank(
-    query="latest transformer architectures",
-    chunks=[
-        {"id": "1", "score": 0.82},
-        {"id": "2", "score": 0.78}
-    ],
-    top_k=10
-)
-```
-
-Returns:
-
-```json
-[
-  {
-    "id": "1",
-    "final_score": 0.91,
-    "vector_score": 0.82,
-    "temporal_score": 0.76,
-    "trust_score": 0.6
-  }
-]
-```
-
----
-
-### ⏳ 2. Temporal Decay Engine
-
-Supports multiple decay strategies:
-
-* **Exponential decay**
-* **Piecewise decay**
-* **(Planned) Learned decay**
-
-Example:
-
-```
-decay(Δt) = e^(-λΔt)
-```
-
-Each chunk can have its own decay configuration.
-
----
-
-### 🗂️ 3. Chunk-Level Metadata
-
-Each chunk stores:
-
-```json
-{
-  "chunk_id": "abc123",
-  "timestamp": "2024-01-01T00:00:00",
-  "decay_type": "exponential",
-  "decay_params": {"lambda": 0.000001},
-  "trust_score": 0.8
-}
-```
-
-Stored in a fast-access store (Redis).
-
----
-
-### ⚖️ 4. Multi-Factor Scoring
-
-Final score is computed as:
-
-```
-final_score = α * vector_score + β * temporal_score + γ * trust_score
-```
-
-Weights are configurable and will later support **adaptive tuning**.
-
----
-
-### 🔌 5. Drop-in Middleware API
-
-HalfLife integrates with any vector database:
-
-* Qdrant
-* Pinecone
-* Weaviate
-* FAISS
-* pgvector
-
-Example flow:
-
-```python
-results = qdrant.search(query_embedding)
-
-reranked = engine.rerank(
-    query=query,
-    chunks=results
-)
-```
-
----
-
-### ⚡ 6. Low-Latency Design
-
-* Redis-backed metadata
-* No heavy recomputation at query time
-* Designed for real-time inference pipelines
+### 🧠 3. Intent-Aware Fusion
+HalfLife automatically classifies user queries into **Fresh**, **Historical**, or **Static** intents and adapts its scoring weights accordingly:
+*   **Fresh Query**: Penalizes older results to surface recent breakthroughs.
+*   **Historical Query**: Inverts the decay signal to pull older source documents to the top.
 
 ---
 
@@ -160,168 +66,75 @@ reranked = engine.rerank(
 ```
 User Query
     ↓
+Intent Classifier (Fresh vs Historical)
+    ↓
 Vector Retrieval (Qdrant)
     ↓
 HalfLife Engine
-    ├── Temporal Scoring (Decay)
-    ├── Metadata Fetch (Redis)
-    ├── Score Fusion
+    ├── Score Fetch (Redis-backed)
+    ├── Learned λ Prediction (MLP)
+    └── Intent-Aware Fusion
     ↓
 Re-ranked Chunks
-    ↓
-LLM
 ```
 
 ---
 
-## 📁 Project Structure
+## 🛠️ Getting Started (Developer Experience)
 
-```
-temporal-rag-engine/
-├── engine/
-│   ├── decay/          # Decay functions (exponential, piecewise, etc.)
-│   ├── classifier/     # Document-type classification (future)
-│   ├── store/          # Redis metadata store
-│   ├── fusion/         # Reranking logic
-│   ├── feedback/       # Online updates (future)
-│   ├── events/         # Event-driven invalidation (future)
-│   └── ingestion/      # Data ingestion pipeline
-│
-├── api/                # FastAPI interface
-├── tests/
-└── docker-compose.yml
-```
-
----
-
-## 🚀 Getting Started
-
-### 1. Clone the repo
+### 1. Install via Pip (Package Mode)
+HalfLife is now a standard Python package. You can install it and use the `halflife` CLI:
 
 ```bash
 git clone https://github.com/yourusername/halflife.git
-cd halflife
+pip install -e .
 ```
 
----
-
-### 2. Start services
-
+### 2. Launch Services
+Infrastructure is managed via Docker:
 ```bash
 docker-compose up -d
 ```
 
-Services:
-
-* Qdrant
-* Redis
-* FastAPI server
-
----
-
-### 3. Run API
-
+### 3. Unified CLI
+Use the `halflife` command for all common tasks:
 ```bash
-uvicorn api.main:app --reload
+# Run the end-to-end quickstart
+halflife quickstart
+
+# Start the API server
+halflife serve --port 8000
+
+# Run evaluation benchmarks
+halflife benchmark --output results.json
 ```
 
 ---
 
-### 4. Example Request
+## 🧪 Evaluation & Rigour: The Decoy Mechanism
 
-```bash
-POST /rerank
-```
+To ensure HalfLife's effectiveness, we built a **108-chunk synthetic corpus** containing "Decoys". For every relevant chunk, there is a decoy with **identical text but a different timestamp**. 
 
-```json
-{
-  "query": "latest advancements in GNNs",
-  "chunks": [
-    {"id": "1", "score": 0.85},
-    {"id": "2", "score": 0.80}
-  ],
-  "top_k": 5
-}
-```
+Because their embeddings are identical, standard cosine similarity cannot separate them. Only HalfLife's temporal engine can correctly surface the right chunk, providing a rigorous test for your RAG pipeline's time-awareness.
 
 ---
 
-## 🧪 Evaluation (Planned)
+## 🧬 Learned Decay Workflow
 
-HalfLife introduces new evaluation dimensions:
-
-* **Temporal Relevance**
-* **Freshness Sensitivity**
-* **Temporal Diversity**
-* **Groundedness over time**
+1.  **Collect Baseline**: Run `halflife benchmark --output run_001.json`.
+2.  **Train the MLP**: Run `halflife train --results run_001.json`.
+3.  **Deploy**: The engine automatically loads `decay_mlp.npz` and starts predicting $\lambda$ for all new ingested chunks.
 
 ---
 
-## 🧩 Roadmap
-
-### Phase 1 (MVP)
-
-* [x] Decay engine
-* [x] Redis metadata store
-* [x] Reranking API
-* [x] Qdrant integration
-
-### Phase 2
-
-* [ ] Query temporal intent classifier
-* [ ] Adaptive weighting (α, β, γ)
-* [ ] Feedback-driven decay tuning
-
-### Phase 3
-
-* [ ] Event-driven updates
-* [ ] Temporal knowledge graphs
-* [ ] Learned decay models
+## 🧩 Status & Roadmap
+*   [x] **Phase 1**: Core Decay Engine & Redis Metadata Store.
+*   [x] **Phase 2**: Intent-Aware Fusion & Historical Inversion.
+*   [x] **Phase 3**: Learned Decay MLP & Benchmark Harness.
+*   [ ] **Phase 4**: Event-Driven Fact Supersession (In Progress).
+*   [ ] **Phase 5**: Multi-Vector Store SDKs (Pinecone, Weaviate).
 
 ---
 
-## 🔬 Research Directions
-
-HalfLife opens up exploration in:
-
-* Temporal ranking in IR systems
-* Learned decay functions
-* Time-aware embeddings
-* Adaptive retrieval policies
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome!
-
-Ideas:
-
-* New decay functions
-* Better fusion strategies
-* Evaluation benchmarks
-* Dataset integrations
-
----
-
-## 📄 License
-
-MIT License
-
----
-
-## 🧠 Philosophy
-
-HalfLife is built on a simple idea:
-
-> Not all knowledge ages the same way.
-
-Understanding *when* information matters is as important as understanding *what* it says.
-
----
-
-## ⭐ Support
-
-If you find this project useful, consider starring the repo.
-
----
+## 📄 License & Contributing
+MIT License. Contributions are welcome for new decay functions and integration plugins!

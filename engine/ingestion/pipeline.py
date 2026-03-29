@@ -140,6 +140,19 @@ class HalfLifeIngestor:
         resolved_trust       = trust_score  if trust_score is not None \
                                else classification["trust_score"]
 
+        # If learned decay is explicitly requested, or if the classifier 
+        # is confident, we can let the MLP predict the lambda instead of 
+        # using the static priors from DocTypeClassifier.
+        if resolved_decay_type == "learned":
+            from engine.decay.learned_model import LEARNED_ENGINE
+            predicted_lambda = LEARNED_ENGINE.predict_lambda(
+                doc_type=resolved_doc_type,
+                source_domain=source_domain,
+                text=text
+            )
+            resolved_decay_params = {"lambda": predicted_lambda}
+
+
         chunk_id = str(uuid.uuid4())
         embedding = self.model.encode(text).tolist()
 

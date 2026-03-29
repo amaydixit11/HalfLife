@@ -1,16 +1,27 @@
 """
 corpus.py — Synthetic benchmark corpus for HalfLife.
 
-Builds 54 chunks across 3 topic clusters × 3 doc types × 3 vintages.
-Each chunk has a known timestamp and ground-truth relevance label per
-query intent (fresh / historical / static).
+Builds 108 chunks: 54 primary + 54 decoys.
 
-Design constraints:
-  - Chunks within the same cluster are semantically similar so cosine
-    similarity alone cannot distinguish vintages. The temporal signal
-    is what separates them. This is what the benchmark actually tests.
-  - Ground truth is deterministic: no human annotation required.
-  - The corpus is self-contained — no external data dependencies.
+Primary chunks: 3 topics × 3 doc_types × 3 vintages × 2 = 54
+Decoy chunks:   one per primary, identical text but mirrored vintage
+                (recent ↔ old, mid stays mid)
+
+The decoy mechanism is what makes this benchmark rigorous.
+Each decoy shares the exact same text as its paired primary — meaning
+their embeddings are identical and cosine similarity ties them completely.
+Only the temporal signal can separate a primary from its decoy.
+Without temporal re-ranking, retrieval is essentially flipping a coin
+between a primary and its decoy. HalfLife has to earn the improvement.
+
+Ground truth:
+  fresh queries:      relevant = primary chunks with vintage == "recent"
+  historical queries: relevant = primary chunks with vintage == "old"
+  static queries:     relevant = all PRIMARY chunks for that topic
+                      (decoys excluded even for static — they are
+                       adversarial noise, not valid answers)
+
+Decoys are NEVER in relevant_ids for any intent.
 """
 
 from dataclasses import dataclass, field
@@ -27,31 +38,30 @@ class CorpusChunk:
     chunk_id:      str
     text:          str
     timestamp:     datetime
-    doc_type:      str          # news | research | documentation
-    topic:         str          # transformer_nlp | llm_scaling | vector_search
-    vintage:       str          # recent | mid | old
+    doc_type:      str      # news | research | documentation
+    topic:         str      # transformer_nlp | llm_scaling | vector_search
+    vintage:       str      # recent | mid | old
     source_domain: str
-
     is_decoy:      bool = False
-    
-    # Ground truth relevance per intent type.
-    # 1 = relevant, 0 = not relevant.
+
+    # Ground truth relevance per intent.
+    # Decoys are always 0 for all intents — they are adversarial noise.
     relevant_for_fresh:      int = 0
     relevant_for_historical: int = 0
-    relevant_for_static:     int = 1  # topic match is default
+    relevant_for_static:     int = 0
 
 
 @dataclass
 class BenchmarkQuery:
-    query_id:    str
-    text:        str
-    intent:      str            # fresh | historical | static
-    topic:       str            # must match CorpusChunk.topic
+    query_id:     str
+    text:         str
+    intent:       str       # fresh | historical | static
+    topic:        str
     relevant_ids: List[str] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
-#  Vintage date ranges                                                         #
+#  Vintage timestamps                                                          #
 # --------------------------------------------------------------------------- #
 
 def _now() -> datetime:
@@ -60,29 +70,34 @@ def _now() -> datetime:
 
 def _vintage_timestamp(vintage: str, idx: int) -> datetime:
     """
-    Returns a deterministic timestamp for a given vintage and index.
-    idx spreads chunks across the vintage window so they don't all
-    share the exact same timestamp (which would make age ties).
+    Deterministic timestamp for a given vintage + spread index.
+    idx prevents all chunks in a vintage from sharing the same timestamp,
+    which would create rank ties that obscure benchmark signal.
     """
     now = _now()
     if vintage == "recent":
-        # 1 week – 5 months ago
         base = now - timedelta(days=30)
         return base - timedelta(days=idx * 12)
     elif vintage == "mid":
-        # 14–24 months ago
         base = now - timedelta(days=14 * 30)
         return base - timedelta(days=idx * 15)
     elif vintage == "old":
-        # 36–54 months ago
         base = now - timedelta(days=36 * 30)
         return base - timedelta(days=idx * 20)
     raise ValueError(f"Unknown vintage: {vintage}")
 
 
+def _mirror_vintage(vintage: str) -> str:
+    """Returns the adversarial mirror vintage for decoy construction."""
+    return {"recent": "old", "old": "recent", "mid": "mid"}[vintage]
+
+
 # --------------------------------------------------------------------------- #
-#  Chunk templates                                                             #
+#  Chunk text templates                                                        #
 # --------------------------------------------------------------------------- #
+# Within each topic, texts are intentionally similar across vintages —
+# same vocabulary, same subject. This ensures embedding similarity ties
+# across vintages so only the temporal signal can differentiate them.
 
 _TEMPLATES = {
     "transformer_nlp": {
@@ -222,8 +237,9 @@ _TEMPLATES = {
     },
 }
 
+
 # --------------------------------------------------------------------------- #
-#  Query templates per intent and topic                                        #
+#  Query templates                                                             #
 # --------------------------------------------------------------------------- #
 
 _QUERIES = {
@@ -299,71 +315,69 @@ def build_corpus() -> tuple[list[CorpusChunk], list[BenchmarkQuery]]:
     Constructs the full benchmark corpus and query set.
 
     Returns:
-        chunks:  54 CorpusChunk objects with timestamps and relevance labels
+        chunks:  108 CorpusChunk objects (54 primary + 54 decoys)
         queries: 36 BenchmarkQuery objects (3 topics × 3 intents × 4 queries)
     """
-    chunks: list[CorpusChunk] = []
+    chunks:  list[CorpusChunk]    = []
     queries: list[BenchmarkQuery] = []
 
-    vintages   = ["recent", "mid", "old"]
-    doc_types  = ["news", "research", "documentation"]
-    topics     = list(_TEMPLATES.keys())
+    vintages  = ["recent", "mid", "old"]
+    doc_types = ["news", "research", "documentation"]
+    topics    = list(_TEMPLATES.keys())
 
     chunk_index = 0
 
     for topic in topics:
         for doc_type in doc_types:
-            texts = _TEMPLATES[topic][doc_type]  # 6 texts
+            texts = _TEMPLATES[topic][doc_type]
             for v_idx, vintage in enumerate(vintages):
-                # 2 primary chunks per (topic, doc_type, vintage)
                 for t_idx in range(2):
                     text_idx = v_idx * 2 + t_idx
-                    ts = _vintage_timestamp(vintage, text_idx)
+                    text     = texts[text_idx]
+                    ts       = _vintage_timestamp(vintage, text_idx)
 
-                    # Primary chunk
-                    c = CorpusChunk(
+                    # ---- Primary ----------------------------------------
+                    chunks.append(CorpusChunk(
                         chunk_id=f"chunk_{chunk_index:03d}",
-                        text=texts[text_idx],
+                        text=text,
                         timestamp=ts,
                         doc_type=doc_type,
                         topic=topic,
                         vintage=vintage,
                         source_domain=_source_domain(doc_type),
+                        is_decoy=False,
                         relevant_for_fresh=      1 if vintage == "recent" else 0,
                         relevant_for_historical= 1 if vintage == "old"    else 0,
-                    )
-                    chunks.append(c)
+                        relevant_for_static=     1,
+                    ))
                     chunk_index += 1
 
-                    # Decoy shadow: Same text, DIFFERENT vintage. 
-                    # If primary is recent, decoy is old. If primary is old, decoy is recent.
-                    # This forces cosine to fail (as text is identical) while HalfLife wins.
-                    decoy_vintage = "old" if vintage == "recent" else "recent" if vintage == "old" else "mid"
-                    # Different day for decay tiebreak
-                    d_ts = _vintage_timestamp(decoy_vintage, text_idx + 10) 
-                    
-                    decoy = CorpusChunk(
+                    # ---- Decoy ------------------------------------------
+                    # Identical text → identical embedding → cosine tie.
+                    # Mirrored vintage → temporal signal is the only separator.
+                    # Never relevant for any intent.
+                    decoy_vintage = _mirror_vintage(vintage)
+                    decoy_ts      = _vintage_timestamp(decoy_vintage, text_idx + 10)
+
+                    chunks.append(CorpusChunk(
                         chunk_id=f"chunk_{chunk_index:03d}",
-                        text=texts[text_idx],
-                        timestamp=d_ts,
+                        text=text,
+                        timestamp=decoy_ts,
                         doc_type=doc_type,
                         topic=topic,
                         vintage=decoy_vintage,
                         source_domain=_source_domain(doc_type),
-                        relevant_for_fresh=      0, # always 0 for decoys
-                        relevant_for_historical= 0,
                         is_decoy=True,
-                    )
-                    chunks.append(decoy)
+                        relevant_for_fresh=      0,
+                        relevant_for_historical= 0,
+                        relevant_for_static=     0,
+                    ))
                     chunk_index += 1
 
-    # Build queries and attach relevant_ids
-    # Note: query_text matches some texts perfectly, making it even harder!
+    # ---- Build queries and attach relevant_ids --------------------------
     query_index = 0
     for topic in topics:
         for intent in ["fresh", "historical", "static"]:
-            # 'static' queries consider ALL chunks (including decoys) as relevant 
-            # if they match the topic, as the user only cares about fact correctness.
             for q_text in _QUERIES[topic][intent]:
                 relevant_ids = [
                     c.chunk_id for c in chunks
@@ -399,26 +413,33 @@ def _source_domain(doc_type: str) -> str:
     }.get(doc_type, "generic")
 
 
+def primary_chunks(chunks: list[CorpusChunk]) -> list[CorpusChunk]:
+    return [c for c in chunks if not c.is_decoy]
+
+
+def decoy_chunks(chunks: list[CorpusChunk]) -> list[CorpusChunk]:
+    return [c for c in chunks if c.is_decoy]
+
+
 # --------------------------------------------------------------------------- #
 #  Smoke test                                                                  #
 # --------------------------------------------------------------------------- #
 
 if __name__ == "__main__":
     chunks, queries = build_corpus()
+    primaries = primary_chunks(chunks)
+    decoys    = decoy_chunks(chunks)
 
-    print(f"Corpus: {len(chunks)} chunks")
-    print(f"Queries: {len(queries)} queries")
+    print(f"Total chunks : {len(chunks)}  ({len(primaries)} primary + {len(decoys)} decoys)")
+    print(f"Queries      : {len(queries)}")
 
     from collections import Counter
-    vintage_counts = Counter(c.vintage  for c in chunks)
-    type_counts    = Counter(c.doc_type for c in chunks)
-    intent_counts  = Counter(q.intent   for q in queries)
+    print(f"\nPrimary vintage dist : {dict(Counter(c.vintage for c in primaries))}")
+    print(f"Primary doc_type dist: {dict(Counter(c.doc_type for c in primaries))}")
+    print(f"Query intent dist    : {dict(Counter(q.intent for q in queries))}")
 
-    print(f"\nVintage distribution: {dict(vintage_counts)}")
-    print(f"Doc type distribution: {dict(type_counts)}")
-    print(f"Query intent distribution: {dict(intent_counts)}")
-
-    sample_q = queries[0]
-    print(f"\nSample query: '{sample_q.text}'")
-    print(f"  intent={sample_q.intent}, topic={sample_q.topic}")
-    print(f"  relevant_ids ({len(sample_q.relevant_ids)}): {sample_q.relevant_ids[:4]}...")
+    p0, d0 = primaries[0], decoys[0]
+    print(f"\nDecoy pairing check:")
+    print(f"  Primary : id={p0.chunk_id} vintage={p0.vintage} relevant_static={p0.relevant_for_static}")
+    print(f"  Decoy   : id={d0.chunk_id} vintage={d0.vintage} relevant_static={d0.relevant_for_static}")
+    print(f"  Text matches: {p0.text == d0.text}")

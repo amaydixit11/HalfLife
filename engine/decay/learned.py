@@ -1,22 +1,46 @@
+"""
+learned.py — LearnedDecay function (Option A: chunk-level λ predictor).
+
+This class is used by the DecayRegistry like any other decay function.
+The key difference from ExponentialDecay: λ was predicted by the MLP
+at ingestion time (not hand-tuned), stored in Redis, and loaded here.
+
+At query time this is pure exponential decay — no ML inference.
+The MLP runs only at ingestion time (or when feedback updates trigger
+a λ re-prediction via FeedbackUpdater).
+
+The decay_params dict in Redis must contain:
+    {"lambda": float}    — predicted by LearnedDecayEngine.predict_lambda()
+
+If lambda is missing, falls back to the MLP's cold-start default for
+generic doc type — equivalent to ExponentialDecay with λ=1e-6.
+"""
+
 import math
 from datetime import datetime
 from .base import DecayFunction
-import numpy as np
-from .learned_model import LEARNED_ENGINE
+
 
 class LearnedDecay(DecayFunction):
     """
-    Learned decay: score = f(delta_time, vector_score)
-    This implementation uses a 2-layer MLP to reconciliate 
-    recency with semantic quality.
+    Exponential decay using a MLP-predicted λ stored in params.
+
+    Identical runtime behaviour to ExponentialDecay — the "learned"
+    part is in how λ was set, not in how it's used.
+
+    decay(Δt) = e^(-λ · Δt)
+
+    where λ ∈ [1e-8, 1e-4] was predicted by DecayMLP from chunk features.
     """
+
     def compute(self, timestamp: datetime, now: datetime) -> float:
         delta_seconds = (now - timestamp).total_seconds()
-        delta_seconds = max(0, delta_seconds)
-        
-        # We need the original vector score to make a neural decision
-        # Since the base API only passes (timestamp, now), we'll use 
-        # a default placeholder or assume it's provided in params.
-        vector_score = self.params.get("vector_score", 0.7)
-        
-        return LEARNED_ENGINE.get_score(delta_seconds, vector_score)
+        delta_seconds = max(0.0, delta_seconds)
+
+        lambda_ = self.params.get("lambda", 1e-6)
+
+        # Safety clamp — λ should always be in the MLP's output range,
+        # but guard against stale Redis values or hand-edited metadata.
+        lambda_ = max(1e-8, min(lambda_, 1e-4))
+
+        return math.exp(-lambda_ * delta_seconds)

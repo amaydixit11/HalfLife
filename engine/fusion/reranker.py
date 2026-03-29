@@ -93,7 +93,10 @@ class Reranker:
 
             # ---- Score cache check ------------------------------------
             # If cache is warm, skip all computation for this chunk.
-            cached = self.store.get_cached_score(chunk_id)
+            # Cache is specific to (chunk_id, intent) to allow for
+            # historical vs fresh queries to return different scores.
+            cache_key = f"{chunk_id}:{intent or 'none'}"
+            cached    = self.store.get_cached_score(cache_key)
             if cached is not None:
                 results.append({
                     "id":             chunk_id,
@@ -106,7 +109,7 @@ class Reranker:
                     "cache_hit":      True,
                 })
                 continue
-
+            
             # ---- Redis fetch: mutable decay state only ----------------
             metadata = self.store.get_chunk(chunk_id)
 
@@ -144,7 +147,9 @@ class Reranker:
             )
 
             # ---- Write score cache ------------------------------------
-            self.store.set_cached_score(chunk_id, final_score)
+            self.store.set_cached_score(cache_key, final_score)
+
+
 
             results.append({
                 "id":             chunk_id,
