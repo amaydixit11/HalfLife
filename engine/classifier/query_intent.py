@@ -23,6 +23,11 @@ class QueryIntentClassifier:
         "before", "older", "archive", "ancient",
     }
 
+    STATIC_KEYWORDS = {
+        "best", "stable", "reliable", "recommended", "optimal",
+        "standard", "canonical", "official", "proven", "documented",
+    }
+
     intent_weights = {
         "fresh":      {"vector": 0.3, "temporal": 0.6, "trust": 0.1},
         "historical": {"vector": 0.4, "temporal": 0.5, "trust": 0.1},
@@ -39,7 +44,14 @@ class QueryIntentClassifier:
         """
         q = query.lower()
         
-        # 1. Date Detection: If user specifies a year (1900-2023) -> Historical
+        # 1. Stability Override: If looking for 'Best'/'Stable' -> Use Static
+        if any(kw in q for kw in self.STATIC_KEYWORDS):
+            return {
+                "intent": "static",
+                "weights": self.intent_weights["static"],
+            }
+
+        # 2. Date Detection: If user specifies a year in the past -> Historical
         years = re.findall(r"\b(19\d{2}|20[0-1]\d|202[0-3])\b", q)
         if years:
             return {
@@ -47,13 +59,14 @@ class QueryIntentClassifier:
                 "weights": self.intent_weights["historical"],
             }
 
-        # 2. Keyword Detection
+        # 3. Freshness Detection
         if any(kw in q for kw in self.FRESH_KEYWORDS):
             return {
                 "intent": "fresh",
                 "weights": self.intent_weights["fresh"],
             }
 
+        # 4. Historical Keyword Detection
         if any(kw in q for kw in self.HISTORICAL_KEYWORDS):
             return {
                 "intent": "historical",

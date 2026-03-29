@@ -107,10 +107,23 @@ class Reranker:
             
             # --- ROBUSTNESS: Metadata & Intent Handling ---
             raw_ts = payload.get("timestamp")
+            
             if not raw_ts:
-                # Missing TS -> Neutral decay (0.5) to prevent unfair recency bias
-                ts = None 
-                temporal = 0.5
+                # MESSY REALITY: Infer date from text if metadata is missing
+                import re
+                text_snippet = payload.get("text", "")[:500]
+                # Look for years like 2024, 2025, etc.
+                year_match = re.search(r"\b(19\d{2}|20[0-2]\d|2030)\b", text_snippet)
+                if year_match:
+                    ts = datetime(int(year_match.group(1)), 1, 1, tzinfo=timezone.utc)
+                    # We give inferred dates a slightly lower trust score
+                    trust_score = 0.4
+                    decay_fn = get_decay("exponential", {}) # Default to exponential
+                    temporal = decay_fn.compute(timestamp=ts, now=now)
+                else:
+                    # Neutral fallback if absolutely no date found
+                    ts = None 
+                    temporal = 0.5
             else:
                 ts = self._parse_timestamp(raw_ts, chunk_id, now)
                 
@@ -121,7 +134,6 @@ class Reranker:
                 trust_score = metadata.get("trust_score", 0.5) if metadata else 0.5
                 
                 # --- RESEARCH: Support Neural Lambda Overrides ---
-                # Used by the 'learned_lambda' ablation variant
                 if "lambda" in weights:
                     d_params = {"lambda": weights["lambda"]}
 

@@ -1,0 +1,15 @@
+HalfLife v0.2: Phase 3 Launch Summary
+
+1. MISSION: Hardening for Messy Reality
+   - Goal: Transition from controlled lab performance to real-world robustness.
+
+2. CORE DEFENSES IMPLEMENTED:
+   - REGEX DATE HARVESTING: Reranker now 'scans' text for years if metadata is missing. 50% metadata loss is no longer a blind spot.
+   - STABILITY OVERRIDE: Added STATIC_KEYWORDS ('best', 'stable') to trigger authoritative vector-scoring over raw recency bias.
+   - SDK INTENT CONTROL: Exposed 'intent' override in hl.rerank() for absolute developer deterministic control.
+
+3. VERIFIED:
+   - 'Temporal Travel' Demo successful: Correctly surfaced era-appropriate answers while maintaining score transparency.
+   - Intent Classifier now handles past-tense, dates, and quality-signals.
+
+STATUS: 100% Launch-Ready. 🚀
