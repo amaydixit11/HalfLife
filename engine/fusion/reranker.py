@@ -81,90 +81,85 @@ class Reranker:
         """
         now     = datetime.now(timezone.utc)
         weights = weights or self.DEFAULT_WEIGHTS
-        results = []
 
+        # ------------------------------------------------------------------ #
+        #  Batch-level Scoring & Normalization                               #
+        # ------------------------------------------------------------------ #
+
+        
+        # 1. First pass: compute raw scores (or use cache)
+        raw_results = []
         for chunk in chunks:
             chunk_id     = chunk.get("id")
             vector_score = chunk.get("score", 0.0)
             payload      = chunk.get("payload", {})
+            if not chunk_id: continue
 
-            if not chunk_id:
-                continue
-
-            # ---- Score cache check ------------------------------------
-            # If cache is warm, skip all computation for this chunk.
-            # Cache is specific to (chunk_id, intent) to allow for
-            # historical vs fresh queries to return different scores.
             cache_key = f"{chunk_id}:{intent or 'none'}"
             cached    = self.store.get_cached_score(cache_key)
+            
             if cached is not None:
-                results.append({
-                    "id":             chunk_id,
-                    "final_score":    cached,
-                    "vector_score":   vector_score,
-                    "temporal_score": None,   # not recomputed
-                    "trust_score":    None,
-                    "timestamp":      payload.get("timestamp"),
-                    "doc_type":       payload.get("doc_type"),
-                    "cache_hit":      True,
+                raw_results.append({
+                    "id": chunk_id, "final": cached, "v": vector_score, "t": None, "tr": 0.5, "p": payload, "cached": True
                 })
                 continue
             
-            # ---- Redis fetch: mutable decay state only ----------------
+            # Metadata & Decay computation
             metadata = self.store.get_chunk(chunk_id)
-
-            # ---- Timestamp: always from Qdrant payload ----------------
-            # Never from Redis — Qdrant payload is the single source of truth.
             ts = self._parse_timestamp(payload.get("timestamp"), chunk_id, now)
-
-            # ---- Temporal score ---------------------------------------
+            
             if metadata:
-                decay_fn = get_decay(
-                    metadata.get("decay_type", "exponential"),
-                    metadata.get("decay_params", {}),
-                )
+                decay_fn = get_decay(metadata.get("decay_type", "exponential"), metadata.get("decay_params", {}))
                 trust_score = metadata.get("trust_score", 0.5)
             else:
-                # No Redis entry: use exponential with default lambda.
-                logger.debug(f"No Redis metadata for chunk {chunk_id}, using defaults")
-                decay_fn    = get_decay("exponential", {})
+                decay_fn = get_decay("exponential", {})
                 trust_score = 0.5
 
-            raw_temporal = decay_fn.compute(timestamp=ts, now=now)
-
-            # ---- Historical intent: invert temporal score -------------
-            # For historical queries we want older = higher.
+            temporal = decay_fn.compute(timestamp=ts, now=now)
             if intent == "historical":
-                temporal_score = 1.0 - raw_temporal
-            else:
-                temporal_score = raw_temporal
-
-            # ---- Fusion -----------------------------------------------
-            final_score = (
-                weights["vector"]   * vector_score  +
-                weights["temporal"] * temporal_score +
-                weights["trust"]    * trust_score
-            )
-
-            # ---- Write score cache ------------------------------------
-            self.store.set_cached_score(cache_key, final_score)
-
-
-
-            results.append({
-                "id":             chunk_id,
-                "final_score":    round(final_score, 6),
-                "vector_score":   round(vector_score, 6),
-                "temporal_score": round(temporal_score, 6),
-                "trust_score":    round(trust_score, 6),
-                "timestamp":      ts.isoformat(),
-                "doc_type":       payload.get("doc_type"),
-                "cache_hit":      False,
+                temporal = 1.0 - temporal
+            
+            raw_results.append({
+                "id": chunk_id, "v": vector_score, "t": temporal, "tr": trust_score, "p": payload, "cached": False, "key": cache_key
             })
 
-        results.sort(key=lambda x: x["final_score"], reverse=True)
-        top_results = results[:top_k]
+        # 2. Second pass: Min-Max Normalization (only for non-cached results)
+        v_scores = [r["v"] for r in raw_results if not r.get("cached")]
+        t_scores = [r["t"] for r in raw_results if not r.get("cached")]
+        
+        def norm(val, vals):
+            if not vals or max(vals) == min(vals): return 0.5
+            return (val - min(vals)) / (max(vals) - min(vals))
 
+        final_chunks = []
+        for r in raw_results:
+            if r.get("cached"):
+                final_score = r["final"]
+            else:
+                # Weighted fusion on normalized signals
+                vn = norm(r["v"], v_scores)
+                tn = norm(r["t"], t_scores)
+                
+                final_score = (
+                    weights["vector"]   * vn +
+                    weights["temporal"] * tn +
+                    weights["trust"]    * r["tr"]
+                )
+                self.store.set_cached_score(r["key"], final_score)
+            
+            final_chunks.append({
+                "id":             r["id"],
+                "final_score":    round(final_score, 6),
+                "vector_score":   round(r["v"], 6),
+                "temporal_score": round(r["t"], 6) if r["t"] is not None else None,
+                "trust_score":    round(r["tr"], 6),
+                "timestamp":      r["p"].get("timestamp"),
+                "doc_type":       r["p"].get("doc_type"),
+                "cache_hit":      r.get("cached", False),
+            })
+
+        final_chunks.sort(key=lambda x: x["final_score"], reverse=True)
+        top_results = final_chunks[:top_k]
         warnings = self.checker.check(top_results, intent=intent or "fresh")
 
         return {
@@ -172,6 +167,7 @@ class Reranker:
             "consistency_warnings": warnings,
             "applied_weights":      weights,
         }
+
 
     # ------------------------------------------------------------------ #
     #  Helpers                                                            #
