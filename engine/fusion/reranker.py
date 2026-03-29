@@ -170,6 +170,7 @@ class Reranker:
 
             final_chunks.append({
                 "id":             r["id"],
+                "original_id":    r["p"].get("original_id"),
                 "final_score":    round(final_score, 6),
                 "vector_score":   round(r["v"], 6),
                 "temporal_score": round(r["t"], 10), # Precision for debug

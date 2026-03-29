@@ -140,3 +140,22 @@ def debug_chunk(chunk_id: str):
         "feedback_counts": feedback_counts,
         "dirty":          cached_score is None,
     }
+
+class InvalidateRequest(BaseModel):
+    chunk_id: str
+    strategy: str = Field("soft", pattern="^(soft|hard)$")
+    reason:   Optional[str] = None
+
+@app.post("/invalidate")
+def invalidate_chunk_endpoint(req: InvalidateRequest):
+    """
+    Manually trigger the EventBus to invalidate a fact.
+    - Soft: Reset trust score to 0.5 (neutral)
+    - Hard: Set trust score to 0.0 (untrusted)
+    """
+    from engine.events.bus import EventBus
+    bus = EventBus(store)
+    success = bus.invalidate(req.chunk_id, strategy=req.strategy)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"No metadata for chunk {req.chunk_id}")
+    return {"status": "invalidated", "strategy": req.strategy, "chunk_id": req.chunk_id, "reason": req.reason}

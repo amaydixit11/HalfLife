@@ -49,6 +49,26 @@ def temporal_freshness(retrieved_ids, chunk_map, k=TOP_K):
             scores.append(1.0 / (1.0 + age_days))
     return float(np.mean(scores)) if scores else 0.0
 
+def aggregate_results(runs: List[Dict]) -> Dict:
+    """
+    Computes summary metrics from a list of per-query benchmark results.
+    """
+    summary = defaultdict(lambda: defaultdict(list))
+    for r in runs:
+        # Normalize keys to what the metrics loop expects
+        intent = r.get("intent", "static")
+        summary[intent]["ndcg_delta"].append(r["halflife"]["ndcg"] - r["baseline"]["ndcg"])
+        summary[intent]["mrr_delta"].append(r["halflife"]["mrr"] - r["baseline"]["mrr"])
+        summary[intent]["tf_delta"].append(r["halflife"]["tf"] - r["baseline"]["tf"])
+        # Individual averages
+        summary[intent]["h_ndcg"].append(r["halflife"]["ndcg"])
+        summary[intent]["b_ndcg"].append(r["baseline"]["ndcg"])
+
+    agg = {}
+    for intent, mets in summary.items():
+        agg[intent] = {k: float(np.mean(v)) for k, v in mets.items()}
+    return agg
+
 def main(
     skip_ingest: bool = False,
     output:      Optional[str] = None,
@@ -91,14 +111,53 @@ def main(
         hl_res = reranker.rerank(query=sample.text, chunks=base_chunks, intent=cl["intent"], weights=cl["weights"], top_k=TOP_K)
         
         results[sample.intent].append({
-            "query": sample.text,
-            "baseline": [str(r.id) for r in q_points],
-            "halflife": [r["id"] for r in hl_res["reranked_chunks"]]
+            "query":    sample.text,
+            "metrics": {
+                "baseline": {
+                    "ndcg": ndcg_at_k(sample.target_ids, [r.payload.get("original_id") for r in q_points]),
+                    "mrr":  mrr(sample.target_ids, [r.payload.get("original_id") for r in q_points]),
+                    "tf":   temporal_freshness([r.payload.get("original_id") for r in q_points], chunk_map)
+                },
+                "halflife": {
+                    "ndcg": ndcg_at_k(sample.target_ids, [r.get("original_id") for r in hl_res["reranked_chunks"]]),
+                    "mrr":  mrr(sample.target_ids, [r.get("original_id") for r in hl_res["reranked_chunks"]]),
+                    "tf":   temporal_freshness([r.get("original_id") for r in hl_res["reranked_chunks"]], chunk_map)
+                }
+            }
         })
 
-    # Aggregator & Summary logic...
-    # (Simplified for the CLI demo)
-    print(f"\n✅ Benchmark Complete. Mode: {decay_type or 'Default'}")
+    # Aggregator & Summary Table
+    from rich.console import Console
+    from rich.table import Table
+    console = Console()
+
+    summary = Table(title=f"📊 HalfLife IR Benchmark (Mode: {decay_type or 'Default'})", box=None)
+    summary.add_column("Intent", style="cyan", header_style="bold")
+    summary.add_column("Metric", style="magenta", header_style="bold")
+    summary.add_column("Baseline", justify="right")
+    summary.add_column("HalfLife", justify="right", style="bold green")
+    summary.add_column("Gain", justify="right")
+
+    for intent, items in results.items():
+        if not items: continue
+        for met in ["ndcg", "mrr", "tf"]:
+            b_vals = [it["metrics"]["baseline"][met] for it in items]
+            h_vals = [it["metrics"]["halflife"][met] for it in items]
+            
+            b_avg, h_avg = np.mean(b_vals), np.mean(h_vals)
+            gain = ((h_avg / b_avg) - 1.0) * 100 if b_avg > 0 else 0.0
+            
+            summary.add_row(
+                intent.upper(),
+                met.upper(),
+                f"{b_avg:.4f}",
+                f"{h_avg:.4f}",
+                f"{gain:+.1f}%"
+            )
+        summary.add_section()
+
+    console.print("\n")
+    console.print(summary)
     if output:
         with open(output, "w") as f: json.dump(results, f, indent=2)
         print(f"📄 Results written to {output}")

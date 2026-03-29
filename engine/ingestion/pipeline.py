@@ -105,6 +105,7 @@ class HalfLifeIngestor:
         decay_type:    Optional[str]  = None,
         decay_params:  Optional[dict] = None,
         trust_score:   Optional[float] = None,
+        original_id:   Optional[str]  = None,
     ) -> str:
         """
         Ingest a single text chunk. Returns the assigned chunk_id.
@@ -123,6 +124,7 @@ class HalfLifeIngestor:
             decay_type:    Override decay family.
             decay_params:  Override decay parameters e.g. {"lambda": 1e-7}.
             trust_score:   Override trust prior (0.0–1.0).
+            original_id:   Stable ID from truth set (e.g. "corpus-123").
 
         Returns:
             chunk_id (str uuid4)
@@ -166,7 +168,7 @@ class HalfLifeIngestor:
                     id=chunk_id,
                     vector=embedding,
                     payload={
-                        "chunk_id":        chunk_id,
+                        "original_id":     original_id or chunk_id,
                         "text":            text,
                         "timestamp":       timestamp.isoformat(),
                         "timestamp_epoch": timestamp.timestamp(),
