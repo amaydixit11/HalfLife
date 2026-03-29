@@ -33,8 +33,9 @@ class HalfLife:
         If 'intent' is provided, it overrides the automatic classifier.
         """
         if intent:
-            # Use manual override
-            weights = self.classifier.intent_weights.get(intent, self.classifier.intent_weights["static"])
+            if intent not in self.classifier.intent_weights:
+                raise ValueError(f"Invalid intent: '{intent}'. Must be one of: {list(self.classifier.intent_weights.keys())}")
+            weights = self.classifier.intent_weights[intent]
             classification = {"intent": intent, "weights": weights}
         else:
             # Use automatic classification

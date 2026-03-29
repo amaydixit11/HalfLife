@@ -22,22 +22,22 @@ def run_demo():
     
     # 1. Ingest Conflict
     console.print(f"\n📥 [bold]Step 1: Ingesting Temporal Conflict...[/bold]")
-    id_bill  = hl.ingest("Microsoft CEO in the early 2000s: Bill Gates was the leader during the dot-com era.", "2000", doc_type="research")
-    id_satya = hl.ingest("Microsoft CEO in 2026: Satya Nadella has led the cloud and AI transformation since 2014.", "2026", doc_type="news")
+    # FORMAT: [YEAR] ENTITY: DESC
+    id_bill  = hl.ingest("[2000] Bill Gates: Served as the CEO of Microsoft during the dot-com era.", "2000", doc_type="research")
+    id_satya = hl.ingest("[2026] Satya Nadella: Currently serves as the CEO of Microsoft, leading AI transformation.", "2026", doc_type="news")
     console.print(f"   [green]✓ Ingested Bill Gates (2000)[/green]")
     console.print(f"   [green]✓ Ingested Satya Nadella (2026)[/green]")
     
-    time.sleep(1) # Wait for Qdrant consistency
+    time.sleep(1) 
     
-    # Common mock search hits
     q_hits = [
-        {"id": id_bill,  "score": 0.82, "payload": {"text": "Microsoft CEO in the 2000s: Bill Gates was leader...", "timestamp": "2000-01-01T00:00:00Z"}},
-        {"id": id_satya, "score": 0.85, "payload": {"text": "Microsoft CEO in 2026: Satya Nadella... leader in AI.", "timestamp": "2026-01-01T00:00:00Z"}}
+        {"id": id_bill,  "score": 0.82, "payload": {"text": "[2000] Bill Gates: Served as the CEO of Microsoft...", "timestamp": "2000-01-01T00:00:00Z"}},
+        {"id": id_satya, "score": 0.85, "payload": {"text": "[2026] Satya Nadella: Currently serves as the CEO...", "timestamp": "2026-01-01T00:00:00Z"}}
     ]
     
     queries = [
-        ("Who is the current CEO of Microsoft?", None), # Auto-detects 'fresh'
-        ("Who was the CEO of Microsoft in the 2000s?", None) # Auto-detects 'historical'
+        ("Who is the current CEO of Microsoft?", None),
+        ("Who was the CEO of Microsoft in the 2000s?", None)
     ]
     
     for query, force_intent in queries:
@@ -47,13 +47,14 @@ def run_demo():
         console.print("\n[dim]Baseline: Standard Vector Retrieval[/dim]")
         baseline_table = Table(box=None, show_header=True, header_style="bold dim")
         baseline_table.add_column("Rank", justify="center")
-        baseline_table.add_column("Result", justify="left")
+        baseline_table.add_column("Entity", justify="left")
         baseline_table.add_column("Vintage", justify="center")
 
         raw_hits = sorted(q_hits, key=lambda x: x["score"], reverse=True)
         for i, h in enumerate(raw_hits):
-            entity = "Bill Gates" if "Bill" in h["payload"]["text"] else "Satya Nadella"
-            vintage = "2000" if "2000" in h["payload"]["text"] else "2026"
+            chunk_txt = h["payload"]["text"]
+            entity = chunk_txt.split("]")[1].split(":")[0].strip()
+            vintage = chunk_txt.split("[")[1].split("]")[0].strip()
             baseline_table.add_row(f"#{i+1}", entity, vintage)
         console.print(baseline_table)
 
@@ -70,7 +71,7 @@ def run_demo():
 
         for i, chunk in enumerate(reranked):
             chunk_txt = chunk.get("text", "")
-            entity = "Bill Gates" if "Bill" in chunk_txt else "Satya Nadella"
+            entity = chunk_txt.split("]")[1].split(":")[0].strip()
             hl_table.add_row(
                 f"#{i+1}", 
                 entity, 
@@ -80,13 +81,13 @@ def run_demo():
             )
         console.print(hl_table)
         
-        # Verdict logic
+        # Verdict
         top_txt = reranked[0].get("text", "")
         is_fresh = "current" in query.lower()
         success = ("Satya" in top_txt if is_fresh else "Bill" in top_txt)
         
         if success:
-            console.print(f"\n   [bold green]✅ WIN: HalfLife correctly travel back in time to surface the era-correct fact.[/bold green]")
+            console.print(f"\n   [bold green]✅ WIN: HalfLife correctly surfaced the era-appropriate answer.[/bold green]")
         else:
             console.print(f"\n   [bold red]❌ MISSED: Signal threshold insufficient to overcome vector score.[/bold red]")
 

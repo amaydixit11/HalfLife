@@ -2,6 +2,17 @@
 
 **The Temporal-Aware Ranking Engine. Fixing the "Latest vs. Greatest" problem in RAG.**
 
+## ⚡ Try it in 10 seconds
+
+Experience the "Temporal Travel" win instantly (requires Docker):
+```bash
+# 1. Start Qdrant + Redis
+docker-compose up -d
+
+# 2. Run the definitive demo
+halflife demo
+```
+
 ---
 
 ### 🚨 The Problem: Your RAG is Time-Blind
