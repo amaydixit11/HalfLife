@@ -1,18 +1,18 @@
-# HalfLife
+# HalfLife 🧱
 
-**Temporal-Aware Ranking Engine for Modern RAG**
+**The Temporal-Aware Ranking Engine. Fixing the "Latest vs. Greatest" problem in RAG.**
 
 ---
 
-## 🚨 The Problem: Time-Blind RAG
+### 🚨 The Problem: Your RAG is Time-Blind
 
-Traditional RAG systems are **time-blind**. They rank documents solely by semantic similarity, leading to "Temporal Hallucinations":
+Traditional RAG systems are **time-blind**. They rank documents solely by semantic similarity, leading to **Temporal Hallucinations**:
 
 *   **Query**: *"What is the state-of-the-art model for NLP?"*
-*   **Retriever**: Finds a 2019 paper (BERT) with 0.98 similarity.
-*   **LLM**: *"BERT is the state-of-the-art model."* (❌ **Wrong**: It was surpassed years ago).
+*   **Retriever**: Finds a highly-cited 2019 paper (BERT) with 0.98 similarity.
+*   **LLM**: *"BERT is the state-of-the-art model."* (❌ **Wrong**: It's half a decade outdated).
 
-**HalfLife fixes this.** It introduces a temporal ranking layer that understands the difference between a "Fresh" query (needs latest info) and a "Historical" query (needs archival context).
+**HalfLife fixes this.** It adds a temporal ranking layer between your vector store and your LLM, ensuring you always get the **correct fact for the era.**
 
 ---
 

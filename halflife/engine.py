@@ -27,11 +27,19 @@ class HalfLife:
         self.classifier = QueryIntentClassifier()
         self.ingestor = HalfLifeIngestor(qdrant_url=qdrant_url, redis_url=redis_url)
 
-    def rerank(self, query: str, chunks: List[Dict], top_k: int = 5) -> List[Dict]:
+    def rerank(self, query: str, chunks: List[Dict], top_k: int = 5, intent: Optional[str] = None) -> List[Dict]:
         """
         Reranks a list of chunks based on query intent and temporal decay.
+        If 'intent' is provided, it overrides the automatic classifier.
         """
-        classification = self.classifier.classify(query)
+        if intent:
+            # Use manual override
+            weights = self.classifier.intent_weights.get(intent, self.classifier.intent_weights["static"])
+            classification = {"intent": intent, "weights": weights}
+        else:
+            # Use automatic classification
+            classification = self.classifier.classify(query)
+
         result = self.reranker.rerank(
             query=query,
             chunks=chunks,
