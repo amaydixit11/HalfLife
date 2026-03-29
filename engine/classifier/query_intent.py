@@ -32,7 +32,8 @@ class QueryIntentClassifier:
         "history", "historical", "evolution", "evolved", "origins",
         "background", "originally", "used to", "how did", "first version",
         "early", "founded", "invented", "introduced", "over the years",
-        "timeline", "progression",
+        "timeline", "progression", "was", "were", "previous", "past",
+        "before", "older", "archive", "ancient",
     }
 
     def classify(self, query: str) -> Dict:
@@ -44,7 +45,21 @@ class QueryIntentClassifier:
             }
         """
         q = query.lower()
+        import re
+        
+        # 1. Date Detection: If user specifies a year in the past -> Historical
+        years = re.findall(r"\b(19\d{2}|20[0-1]\d|202[0-3])\b", q)
+        if years:
+            return {
+                "intent": "historical",
+                "weights": {
+                    "vector":   0.4,
+                    "temporal": 0.5, # High weight for inversion
+                    "trust":    0.1,
+                },
+            }
 
+        # 2. Keyword Detection
         if any(kw in q for kw in self.FRESH_KEYWORDS):
             return {
                 "intent": "fresh",
@@ -56,16 +71,12 @@ class QueryIntentClassifier:
             }
 
         if any(kw in q for kw in self.HISTORICAL_KEYWORDS):
-            # NOTE: weights here look similar to static, but the reranker
-            # receives intent="historical" and inverts temporal_score.
-            # The result: temporal weight still matters, but it now rewards
-            # old chunks instead of fresh ones.
             return {
                 "intent": "historical",
                 "weights": {
-                    "vector":   0.5,
-                    "temporal": 0.3,
-                    "trust":    0.2,
+                    "vector":   0.4,
+                    "temporal": 0.5,
+                    "trust":    0.1,
                 },
             }
 
@@ -73,9 +84,9 @@ class QueryIntentClassifier:
         return {
             "intent": "static",
             "weights": {
-                "vector":   0.7,
+                "vector":   0.8,
                 "temporal": 0.1,
-                "trust":    0.2,
+                "trust":    0.1,
             },
         }
 

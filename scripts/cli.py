@@ -40,6 +40,9 @@ def main():
     # --- CLI: quickstart ---
     quick_parser = subparsers.add_parser("quickstart", help="Complete E2E Demonstration (Ingest -> Query -> Rerank)")
 
+    # --- CLI: demo ---
+    demo_parser = subparsers.add_parser("demo", help="Zero-Friction 'Temporal Travel' Demo (Historical vs Fresh)")
+
     args = parser.parse_args()
 
     if args.command == "benchmark":
@@ -83,6 +86,10 @@ def main():
         print("⚡ Launching HalfLife Quickstart Demo...")
         from scripts.quickstart import main as quickstart_main
         quickstart_main()
+
+    elif args.command == "demo":
+        from scripts.demo import run_demo
+        run_demo()
 
     else:
         parser.print_help()

@@ -137,5 +137,37 @@ Because their embeddings are identical, standard cosine similarity cannot separa
 
 ---
 
+## ⚡ Python SDK (The 2-Line Integration)
+
+HalfLife is designed to be **invisible** until you need it. You don't have to rewrite your RAG pipeline—just wrap your results.
+
+```python
+from halflife import HalfLife
+
+# 1. Initialize
+hl = HalfLife()
+
+# 2. Rerank your existing Qdrant/Pinecone results
+# Before: results = qdrant.search(query=query)
+# After:
+results = qdrant.search(query=query)
+reranked = hl.rerank(query=query, chunks=results, top_k=5)
+
+for chunk in reranked:
+    print(f"[{chunk['score']:.2f}] {chunk['payload']['text']}")
+```
+
+---
+
+## 🏁 Zero-Friction Demo
+
+Experience the "Temporal Travel" win in seconds. This demo ingests conflicting facts (Bill Gates 2000 vs Satya Nadella 2026) and proves HalfLife's ability to "look back" for historical queries.
+
+```bash
+halflife demo
+```
+
+---
+
 ## 📄 License & Contributing
 MIT License. Contributions are welcome for new decay functions and integration plugins!
