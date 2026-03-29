@@ -1,0 +1,10 @@
+--only-binary :all:
+fastapi
+uvicorn
+redis
+qdrant-client
+numpy
+scipy
+sentence-transformers
+pydantic
+python-dotenv
