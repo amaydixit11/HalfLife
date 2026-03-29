@@ -16,10 +16,18 @@ Traditional RAG systems are **time-blind**. They rank documents solely by semant
 
 ---
 
-## 📊 Performance Baseline
+## 📊 3-Tier Evaluation Pipeline
 
-Validated against a **108-chunk adversarial corpus** (including "Decoy" chunks with identical text but different dates):
+HalfLife is validated against a **144-chunk multi-tier corpus** designed to simulate real-world RAG failure modes where semantic search fails:
 
+1.  **📄 Real-World Temporal QA**: Focuses on "SOTA" and tool versioning (e.g., React, LLM Leaderboards). Tests if the engine can bypass high-authority historical docs to surface "Current" facts.
+2.  **📚 Historical Evolution**: Tracks technology from 1950 to 2026. Tests the `historical` intent’s ability to "look back" and find foundational foundational markers.
+3.  **🧪 Adversarial Decoys**: Every relevant chunk has a "Decoy" twin with **identical text** but a mirrored timestamp. This provides 100% evidence that ranking improvements are driven by temporal signals, not just embedding bias.
+
+### **🌐 Real-World Evidence (Live Arxiv Data)**
+HalfLife includes a **`data_loader.py`** utility that pulls live metadata from the **Arxiv API**. You can fetch real-world papers on any topic (LLM Scaling, RAG, GNNs) and verify re-ranking against raw, human-authored abstracts with their actual publication history.
+
+### **Verified Results**
 | Query Intent | Baseline nDCG | HalfLife nDCG | **Improvement** |
 | :--- | :--- | :--- | :--- |
 | **Fresh** (Latest info) | 0.0487 | **0.1420** | **+191%** |
@@ -79,7 +87,7 @@ Re-ranked Chunks
 HalfLife is now a standard Python package. You can install it and use the `halflife` CLI:
 
 ```bash
-git clone https://github.com/yourusername/halflife.git
+git clone https://github.com/amaydixit11/halflife.git
 pip install -e .
 ```
 

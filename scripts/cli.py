@@ -2,59 +2,87 @@ import argparse
 import sys
 import os
 
-# Ensure the root is in path
+# Ensure root in path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 def main():
     parser = argparse.ArgumentParser(
         prog="halflife",
-        description="HalfLife: Temporal-Aware RAG Reranking Engine"
+        description="HalfLife: Temporal RAG Middleware v0.2",
+        epilog="Examples:\n  halflife benchmark --output results.json\n  halflife evaluate --ablation\n  halflife serve --port 8080"
     )
-    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+    parser.add_argument("--version", action="version", version="HalfLife v0.2")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # --- CLI: benchmark ---
-    benchmark_parser = subparsers.add_parser("benchmark", help="Run the evaluation benchmark")
-    benchmark_parser.add_argument("--output", type=str, help="Save results to JSON")
-    benchmark_parser.add_argument("--skip-ingest", action="store_true", help="Skip data ingestion")
-    benchmark_parser.add_argument("--decay-type", type=str, help="Force a decay type (e.g. learned)")
+    bench_parser = subparsers.add_parser("benchmark", help="Run nDCG/MRR/TF benchmark on tiered corpus")
+    bench_parser.add_argument("--output", type=str, help="Save summary to JSON")
+    bench_parser.add_argument("--skip-ingest", action="store_true", help="Skip re-ingesting corpus")
+    bench_parser.add_argument("--decay-type", choices=["exponential", "linear", "learned"], default="exponential")
 
-    # --- CLI: train ---
-    train_parser = subparsers.add_parser("train", help="Train the Learned Decay MLP")
-    train_parser.add_argument("--results", required=True, help="Path to benchmark results JSON")
-    train_parser.add_argument("--output", default="decay_mlp.npz", help="Output weights path")
-    train_parser.add_argument("--epochs", type=int, default=500)
-
-    # --- CLI: quickstart ---
-    subparsers.add_parser("quickstart", help="Run the end-to-end integration demo")
+    # --- CLI: evaluate (Research Mode) ---
+    eval_parser = subparsers.add_parser("evaluate", help="Research Ablation on Temporal QA")
+    eval_parser.add_argument("--dataset", default="scripts/temporal_qa.json")
+    eval_parser.add_argument("--ablation", action="store_true", help="Run all 4 research variants")
+    eval_parser.add_argument("--output", type=str, help="Save results to JSON")
 
     # --- CLI: serve ---
-    serve_parser = subparsers.add_parser("serve", help="Start the FastAPI reranking server")
+    serve_parser = subparsers.add_parser("serve", help="Start the HalfLife API server")
     serve_parser.add_argument("--host", default="0.0.0.0")
     serve_parser.add_argument("--port", type=int, default=8000)
+
+    # --- CLI: train ---
+    train_parser = subparsers.add_parser("train", help="Train the LearnedDecay (MLP) engine")
+    train_parser.add_argument("--results", required=True, help="Input benchmark results.json")
+    train_parser.add_argument("--output", default="decay_mlp.npz", help="Where to save model weights")
+    train_parser.add_argument("--epochs", type=int, default=100)
+
+    # --- CLI: quickstart ---
+    quick_parser = subparsers.add_parser("quickstart", help="Complete E2E Demonstration (Ingest -> Query -> Rerank)")
 
     args = parser.parse_args()
 
     if args.command == "benchmark":
-        from scripts.benchmark import main as benchmark_main
-        # Re-parse sys.argv for the sub-module if needed, or pass args directly
-        # For simplicity, we'll patch sys.argv and call main
-        sys.argv = [sys.argv[0]]
-        if args.output: sys.argv.extend(["--output", args.output])
-        if args.skip_ingest: sys.argv.append("--skip-ingest")
-        if args.decay_type: sys.argv.extend(["--decay-type", args.decay_type])
-        benchmark_main()
+        print("🚀 Starting HalfLife Research Benchmark...")
+        try:
+            from scripts.benchmark import main as benchmark_func
+            benchmark_func(
+                output=args.output,
+                skip_ingest=args.skip_ingest,
+                decay_type=args.decay_type
+            )
+        except Exception as e:
+            print(f"❌ Benchmark failed: {e}")
+            sys.exit(1)
 
-    elif args.command == "train":
-        from scripts.train_mlp import train
-        train(results_path=args.results, output_path=args.output, epochs=args.epochs)
-
-    elif args.command == "quickstart":
-        from scripts.quickstart import run_quickstart
-        run_quickstart()
+    elif args.command == "evaluate":
+        print("🏛️ Starting Research Evaluation Suite...")
+        try:
+            from scripts.evaluate import ResearchEvaluator
+            evaluator = ResearchEvaluator()
+            evaluator.evaluate(args.dataset)
+        except Exception as e:
+            print(f"❌ Evaluation failed: {e}")
+            sys.exit(1)
 
     elif args.command == "serve":
         import uvicorn
+        print(f"📡 Starting HalfLife API on {args.host}:{args.port}...")
         uvicorn.run("api.main:app", host=args.host, port=args.port, reload=True)
+
+    elif args.command == "train":
+        print("🧠 Training Neural Fusion Layer...")
+        try:
+            from scripts.train_mlp import train
+            train(results_path=args.results, output_path=args.output, epochs=args.epochs)
+        except Exception as e:
+            print(f"❌ Training failed: {e}")
+            sys.exit(1)
+
+    elif args.command == "quickstart":
+        print("⚡ Launching HalfLife Quickstart Demo...")
+        from scripts.quickstart import main as quickstart_main
+        quickstart_main()
 
     else:
         parser.print_help()

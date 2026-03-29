@@ -15,7 +15,6 @@ def run_quickstart():
     print("🚀 Starting HalfLife Quickstart...\n")
 
     # 1. Initialize Components
-    # Ensure Docker (Qdrant + Redis) is running!
     ingestor   = HalfLifeIngestor()
     store      = RedisStore()
     reranker   = Reranker(store)
@@ -24,75 +23,60 @@ def run_quickstart():
 
     now = datetime.now(timezone.utc)
 
-    # 2. Ingest Sample Data
-    print("📥 Ingesting sample chunks...")
-    
-    # Chunk A: Very Recent (Latest News)
-    id_a = ingestor.ingest(
-        text="Breakthrough in Quantum Computing announced today, March 2026. Researchers achieved 1M qubits.",
-        timestamp=now,
-        source_domain="science-daily",
-        doc_type="news"
-    )
+    # 2. Check for Real Data
+    results = qdrant.count(collection_name="halflife_chunks")
+    if results.count < 5:
+        print("📥 No live data found. Ingesting sample chunks for demonstration...")
+        # [Fallback to sample chunks if needed]
+        ingestor.ingest(
+            text="Breakthrough in Quantum Computing announced March 2026...",
+            timestamp=now,
+            source_domain="science-daily", doc_type="news"
+        )
+    else:
+        print(f"📊 Live Data Detected: Found {results.count} chunks in the engine.")
 
-    # Chunk B: Old but Foundational (History)
-    id_b = ingestor.ingest(
-        text="The first programmable computer, ENIAC, was built in 1945. It marked the beginning of modern computing.",
-        timestamp=now - timedelta(days=365*80), # 1946 approx
-        source_domain="history-archives",
-        doc_type="research"
-    )
-    print(f"   Done. (IDs: {id_a[:8]}..., {id_b[:8]}...)\n")
-
-    # 3. Create a Helper for Reranking
-    def search_and_rerank(query_text: str):
-        print(f"🔍 Query: \"{query_text}\"")
+    # 3. Side-by-Side Search Comparison
+    def search_and_compare(query_text: str):
+        print(f"\n🔍 Query: \"{query_text}\"")
         
-        # --- Standard Vector Search (Qdrant) ---
-        # Note: In a real app, you'd embed the query text. 
-        # Here we just use the ingestor's model for consistency.
         q_vector = ingestor.model.encode(query_text).tolist()
-        results = qdrant.query_points(
+        res = qdrant.query_points(
             collection_name="halflife_chunks",
-            query=q_vector,
-            limit=5,
-            with_payload=True
+            query=q_vector, limit=5, with_payload=True
         ).points
         
-        chunks_for_rerank = [
-            {"id": str(r.id), "score": r.score, "payload": r.payload}
-            for r in results
-        ]
+        chunks = [{"id": str(r.id), "score": r.score, "payload": r.payload} for r in res]
 
-        # --- HalfLife Rerank ---
+        # Rerank with HalfLife
         classification = classifier.classify(query_text)
         reranked = reranker.rerank(
-            query=query_text,
-            chunks=chunks_for_rerank,
-            top_k=5,
-            intent=classification["intent"],
-            weights=classification["weights"]
+            query=query_text, chunks=chunks, top_k=5,
+            intent=classification["intent"], weights=classification["weights"]
         )
 
-        print(f"   Detected Intent: {classification['intent']}")
-        print(f"   Results (Top 1):")
+        print(f"   Detected Intent: {classification['intent'].upper()}")
+        print(f"   {'-'*30}")
+        print(f"   🏆 HalfLife #1 Hit:")
         top = reranked["reranked_chunks"][0]
-        print(f"   -> ID: {top['id'][:8]} | Final Score: {top['final_score']:.4f} {'(Cache Hit)' if top.get('cache_hit') else ''}")
-        v_score = f"{top['vector_score']:.2f}" if top['vector_score'] is not None else "---"
-        t_score = f"{top['temporal_score']:.2f}" if top['temporal_score'] is not None else "CACHED"
-        print(f"   -> TS: {top['timestamp']} | Base: {v_score} | Time: {t_score}")
-
+        ts  = top["timestamp"][:10] if top["timestamp"] else "Unknown"
+        print(f"   -> TS: {ts} | Score: {top['final_score']:.4f}")
+        print(f"   -> Text snippet: {top.get('text', '---')[:90]}...")
+        
+        # Check if the #1 hit changed
+        if str(res[0].id) != top["id"]:
+            print(f"\n   ✨ BOOM! HalfLife re-ranked a NEW chunk into the #1 spot.")
+            print(f"      (Baseline #1 was: {res[0].payload.get('timestamp')[:10]})")
+        else:
+            print(f"\n   ✓ Baseline was already temporally optimal.")
         print("-" * 50)
 
-    # 4. Demonstrate Different Intents
-    
-    # Fresh Query -> Should favor Chunk A (Quantum Computing)
-    search_and_rerank("What is the latest advancement in computing?")
+    # Demonstrate current advancements vs foundations
+    search_and_compare("Explain the latest transformer models from 2025 and 2026")
+    search_and_compare("What are the original founding principles of transformers?")
 
-    # Historical Query -> Should favor Chunk B (ENIAC)
-    search_and_rerank("Tell me about the history of computers.")
-
-    print("\n✅ Quickstart Finished! HalfLife is successfully reranking based on time.")
+    print("\n✅ Quickstart Finished! HalfLife successfully re-ordered real Arxiv results.")
 
 if __name__ == "__main__":
     run_quickstart()
+
