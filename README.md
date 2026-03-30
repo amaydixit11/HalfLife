@@ -6,17 +6,19 @@ HalfLife is the temporal-aware reranking engine that fixes the "Latest vs. Great
 
 | Domain | Query | Baseline RAG (Vector) | HalfLife Fix ✅ |
 | :--- | :--- | :--- | :--- |
-| **AI/NLP** | "Best NLP model today?" | **BERT (2018)** ❌ | **GPT-4 (2024)** ✅ |
-| **Web Dev** | "Latest React version?" | **React 16** (Highly cited) ❌ | **React 19** (Current) ✅ |
-| **Python** | "Fastest way to fetch?" | **Gevent (2012)** ❌ | **Asyncio (2025)** ✅ |
-| **Data** | "Better library than Pandas?" | **Numpy (Original)** ❌ | **Polars (Modern)** ✅ |
-| **Consensus** | "Major blockchain protocol?" | **PoW (Original)** ❌ | **PoS (Standard)** ✅ |
+| **AI/NLP** | "Best SOTA model for NLP?" | **BERT (2018)** ❌ | **GPT-5 (2026)** ✅ |
+| **Web Dev** | "Latest React fetching logic?" | **React 16 (2017)** ❌ | **Server Components (2026)** ✅ |
+| **Python** | "Top concurrent library?" | **Gevent (2012)** ❌ | **Asyncio (2025)** ✅ |
+| **Data** | "Better library than Pandas?" | **Pandas (2008)** ❌ | **Polars (2024)** ✅ |
+| **Consensus** | "Major blockchain standard?" | **PoW (2010)** ❌ | **PoS (2024)** ✅ |
 
-## ⚡ Try the Viral Demo
+## ⚡ Try the Demo
 Experience the "Adversarial Win" in seconds (requires Docker):
 ```bash
 halflife demo
 ```
+
+👉 [Full Testing & Validation SDK Guide](./TESTING.md)
 
 ---
 
