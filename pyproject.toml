@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "halflife-rag"
-version = "0.5.0"
+version = "0.5.2"
 description = "Temporal-aware re-ranking engine for RAG"
 authors = [
     { name = "Amay Dixit", email = "amay@halflife.ai" }
