@@ -13,16 +13,16 @@ from halflife import HalfLife
 console = Console()
 
 def run_viral_demo():
-    logging.basicConfig(level=logging.ERROR) # Quiet the logs for the viral demo
+    logging.basicConfig(level=logging.ERROR) # Quiet the logs for the demo
     hl = HalfLife()
     
     console.print(Panel.fit(
-        "[bold blue]🚀 HalfLife ‘Viral Travel’ Demo v0.5[/bold blue]\n"
+        "[bold blue]🚀 HalfLife ‘Travel’ Demo v0.5[/bold blue]\n"
         "Proving why Vector Search is fundamentally broken for time.",
         border_style="blue"
     ))
     
-    # 5 VIRAL SCENARIOS
+    # 5 SCENARIOS
     scenarios = [
         {
             "name": "AI/NLP: The Authority Trap",

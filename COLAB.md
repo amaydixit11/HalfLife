@@ -19,7 +19,7 @@ Run this in a Colab cell to install the necessary services without Docker:
 !pip install -q rich sentence-transformers qdrant-client redis typer
 ```
 
-## 🎭 2. Running the Viral Demo
+## 🎭 2. Running the Demo
 Once the setup is complete, you can run the same adversarial scenarios directly in Colab:
 
 ```python
