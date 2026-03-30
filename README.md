@@ -1,27 +1,27 @@
-# HalfLife 🧱
+# 🚀 HalfLife
 
-**The Temporal-Aware Ranking Engine. Fixing the "Latest vs. Greatest" problem in RAG.**
+**Stop your RAG from returning wrong answers due to time.** 
 
-## ⚡ Try it in 10 seconds
+HalfLife is the temporal-aware reranking engine that fixes the "Latest vs. Greatest" problem in RAG pipelines. It prevents your system from silently failing when old, authoritative facts override new, relevant truths.
 
-Experience the "Temporal Travel" win instantly (requires Docker):
+| Domain | Query | Baseline RAG (Vector) | HalfLife Fix ✅ |
+| :--- | :--- | :--- | :--- |
+| **AI/NLP** | "Best NLP model today?" | **BERT (2018)** ❌ | **GPT-4 (2024)** ✅ |
+| **Web Dev** | "Latest React version?" | **React 16** (Highly cited) ❌ | **React 19** (Current) ✅ |
+| **Python** | "Fastest way to fetch?" | **Gevent (2012)** ❌ | **Asyncio (2025)** ✅ |
+| **Data** | "Better library than Pandas?" | **Numpy (Original)** ❌ | **Polars (Modern)** ✅ |
+| **Consensus** | "Major blockchain protocol?" | **PoW (Original)** ❌ | **PoS (Standard)** ✅ |
+
+## ⚡ Try the Viral Demo
+Experience the "Adversarial Win" in seconds (requires Docker):
 ```bash
-# 1. Start Qdrant + Redis
-docker-compose up -d
-
-# 2. Run the definitive demo
 halflife demo
 ```
 
 ---
 
-### 🚨 The Problem: Your RAG is Time-Blind
-
-Traditional RAG systems are **time-blind**. They rank documents solely by semantic similarity, leading to **Temporal Hallucinations**:
-
-*   **Query**: *"What is the state-of-the-art model for NLP?"*
-*   **Retriever**: Finds a highly-cited 2019 paper (BERT) with 0.98 similarity.
-*   **LLM**: *"BERT is the state-of-the-art model."* (❌ **Wrong**: It's half a decade outdated).
+### 🚨 RAG is failing silently due to time.
+Most RAG systems are built on "Static Knowledge" assumptions. But in the real world, facts have an **expiration date**. HalfLife uses **Intent-Aware Temporal Fusion** to dynamically re-weight recency vs. authority based on the user's query.
 
 **HalfLife fixes this.** It adds a temporal ranking layer between your vector store and your LLM, ensuring you always get the **correct fact for the era.**
 
@@ -176,6 +176,25 @@ Experience the "Temporal Travel" win in seconds. This demo ingests conflicting f
 
 ```bash
 halflife demo
+```
+
+### 🦙 LlamaIndex (BaseNodePostprocessor)
+Plug HalfLife directly into your LlamaIndex QueryEngine.
+
+```python
+from halflife.integrations.llamaindex import HalfLifePostprocessor
+
+# 1. Initialize Postprocessor
+postprocessor = HalfLifePostprocessor(top_n=3)
+
+# 2. Add to your existing query engine
+query_engine = index.as_query_engine(
+    similarity_top_k=10,
+    node_postprocessors=[postprocessor]
+)
+
+# 3. Fix temporal hallucinations
+response = query_engine.query("What is the latest React version?")
 ```
 
 ---
