@@ -27,11 +27,18 @@ class HalfLife:
         self.classifier = QueryIntentClassifier()
         self.ingestor = HalfLifeIngestor(qdrant_url=qdrant_url, redis_url=redis_url)
 
-    def rerank(self, query: str, chunks: List[Dict], top_k: int = 5, intent: Optional[str] = None) -> List[Dict]:
-        """
-        Reranks a list of chunks based on query intent and temporal decay.
-        If 'intent' is provided, it overrides the automatic classifier.
-        """
+        # Normalization: Handle ScoredPoints or other objects from Qdrant/Pinecone/LangChain
+        normalized_chunks = []
+        for c in chunks:
+            if hasattr(c, "id") and hasattr(c, "score"):
+                normalized_chunks.append({
+                    "id":      str(getattr(c, "id")),
+                    "score":   getattr(c, "score"),
+                    "payload": getattr(c, "payload", {})
+                })
+            else:
+                normalized_chunks.append(c)
+
         if intent:
             if intent not in self.classifier.intent_weights:
                 raise ValueError(f"Invalid intent: '{intent}'. Must be one of: {list(self.classifier.intent_weights.keys())}")
@@ -43,7 +50,7 @@ class HalfLife:
 
         result = self.reranker.rerank(
             query=query,
-            chunks=chunks,
+            chunks=normalized_chunks,
             intent=classification["intent"],
             weights=classification["weights"],
             top_k=top_k
