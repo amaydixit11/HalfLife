@@ -1,18 +1,6 @@
-# 🚀 HalfLife
+# HalfLife 🧱
 
-**Stop your RAG from returning wrong answers due to time.** 
-
-HalfLife is the temporal-aware reranking engine that fixes the "Latest vs. Greatest" problem in RAG pipelines. It prevents your system from silently failing when old, authoritative facts override new, relevant truths.
-
-## ⚠️ The Problem: Your RAG is Time-Blind
-
-Standard RAG (Vector Search) is biased toward **Authority**. If a document from 2019 has a higher cosine similarity than one from 2024, your LLM will get the 5-year-old answer every single time.
-
-| Query | Standard RAG Response | HalfLife Response | Status |
-| :--- | :--- | :--- | :--- |
-| "What is the state-of-the-art NLP model?" | **BERT (2019)** ❌ | **GPT-4 (2024)** ✅ | **FIXED** |
-| "Latest React version?" | **React 16** (Highly cited) ❌ | **React 19** (Current) ✅ | **FIXED** |
-| "Who is the CEO of Microsoft?" | **Bill Gates** (Founding) ❌ | **Satya Nadella** (Active) ✅ | **FIXED** |
+**The Temporal-Aware Ranking Engine. Fixing the "Latest vs. Greatest" problem in RAG.**
 
 ## ⚡ Try it in 10 seconds
 
@@ -27,8 +15,13 @@ halflife demo
 
 ---
 
-### 🚨 RAG is failing silently due to time.
-Most RAG systems are built on "Static Knowledge" assumptions. But in the real world, facts have an **expiration date**. HalfLife uses **Intent-Aware Temporal Fusion** to dynamically re-weight recency vs. authority based on the user's query.
+### 🚨 The Problem: Your RAG is Time-Blind
+
+Traditional RAG systems are **time-blind**. They rank documents solely by semantic similarity, leading to **Temporal Hallucinations**:
+
+*   **Query**: *"What is the state-of-the-art model for NLP?"*
+*   **Retriever**: Finds a highly-cited 2019 paper (BERT) with 0.98 similarity.
+*   **LLM**: *"BERT is the state-of-the-art model."* (❌ **Wrong**: It's half a decade outdated).
 
 **HalfLife fixes this.** It adds a temporal ranking layer between your vector store and your LLM, ensuring you always get the **correct fact for the era.**
 
@@ -39,7 +32,7 @@ Most RAG systems are built on "Static Knowledge" assumptions. But in the real wo
 HalfLife is validated against a **144-chunk multi-tier corpus** designed to simulate real-world RAG failure modes where semantic search fails:
 
 1.  **📄 Real-World Temporal QA**: Focuses on "SOTA" and tool versioning (e.g., React, LLM Leaderboards). Tests if the engine can bypass high-authority historical docs to surface "Current" facts.
-2.  **📚 Historical Evolution**: Tracks technology from 1950 to 2026. Tests the `historical` intent’s ability to "look back" and find foundational foundational markers.
+2.  **� The Authority Trap (Adversarial TCB)**: **This is the killer evaluation.** We ingest high-authority "Textbook-style" facts from 2018 (e.g., formal BERT descriptions) alongside low-authority "Community-style" modern truths from 2026. Standard vector search confidently picks the clean, formal (but wrong) answer. Only HalfLife's temporal fusion survives the trap.
 3.  **🧪 Adversarial Decoys**: Every relevant chunk has a "Decoy" twin with **identical text** but a mirrored timestamp. This provides 100% evidence that ranking improvements are driven by temporal signals, not just embedding bias.
 
 ### **🌐 Real-World Evidence (Live Arxiv Data)**
@@ -177,28 +170,12 @@ for chunk in reranked:
 
 ---
 
-## 🔗 Framework Integrations
+## 🏁 Zero-Friction Demo
 
-HalfLife is designed to be a drop-in component for your existing AI stack.
+Experience the "Temporal Travel" win in seconds. This demo ingests conflicting facts (Bill Gates 2000 vs Satya Nadella 2026) and proves HalfLife's ability to "look back" for historical queries.
 
-### ⛓️ LangChain (BaseDocumentCompressor)
-Plug HalfLife directly into your `ContextualCompressionRetriever` to fix temporal hallucinations in any LangChain pipeline.
-
-```python
-from halflife.integrations.langchain import HalfLifeReranker
-from langchain.retrievers import ContextualCompressionRetriever
-
-# 1. Initialize Reranker
-compressor = HalfLifeReranker(top_k=3)
-
-# 2. Wrap your existing retriever
-compression_retriever = ContextualCompressionRetriever(
-    base_compressor=compressor, 
-    base_retriever=my_existing_qdrant_retriever
-)
-
-# 3. Get accurate, era-appropriate documents
-docs = compression_retriever.get_relevant_documents("What is the latest LLM?")
+```bash
+halflife demo
 ```
 
 ---

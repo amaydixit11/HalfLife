@@ -88,7 +88,7 @@ def main():
         quickstart_main()
 
     elif args.command == "demo":
-        from scripts.demo import run_demo
+        from scripts.demo import run_deceptive_demo as run_demo
         run_demo()
 
     else:
