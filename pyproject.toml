@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "halflife-rag"
-version = "0.5.2"
+version = "0.5.3"
 description = "Temporal-aware re-ranking engine for RAG"
 authors = [
     { name = "Amay Dixit", email = "amay@halflife.ai" }
@@ -27,4 +27,4 @@ halflife = "scripts.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["engine*", "api*", "scripts*"]
+include = ["halflife*", "engine*", "api*", "scripts*"]

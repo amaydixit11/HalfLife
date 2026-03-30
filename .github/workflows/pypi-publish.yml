@@ -33,7 +33,10 @@ jobs:
 
       - name: Build Package
         run: |
-          python -m build
+          python -m build -v
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          print-hash: true
+          # Note: If OIDC fails, Amay can add 'password: ${{ secrets.PYPI_API_TOKEN }}' here
