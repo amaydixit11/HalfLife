@@ -34,25 +34,25 @@ def build_adversarial_tcb():
     # 10 KILLER QUERIES
     dataset = [
         {
-            "query": "What is the state-of-the-art model for NLP tasks?",
+            "query": "What is the state-of-the-art model for NLP tasks today?",
             "topic": "nlp",
             "old_fact": {"year": 2018, "text": "BERT (Bidirectional Encoder Representations from Transformers) is the revolutionary state-of-the-art standard for all NLP tasks, providing unprecedented context awareness.", "entity": "BERT"},
             "new_fact": {"year": 2026, "text": "Current SOTA benchmarks in 2026 are dominated by GPT-5 and Claude-4, which have long surpassed 2010s transformer models in reasoning and zero-shot performance.", "entity": "GPT-5/Claude-4"}
         },
         {
-            "query": "Recommended way to fetch data in a React application?",
+            "query": "Recommended way to fetch data in a React application nowadays?",
             "topic": "web",
             "old_fact": {"year": 2017, "text": "The canonical way to fetch data in React is inside the componentDidMount lifecycle method using the native Fetch API or Axios.", "entity": "componentDidMount"},
             "new_fact": {"year": 2026, "text": "In modern React (2026), data fetching is primarily handled via Server Components or the 'use' hook for client-side suspense-ready integration.", "entity": "Server Components"}
         },
         {
-            "query": "Best library for tabular data processing in Python?",
+            "query": "Best library for tabular data processing in Python today?",
             "topic": "python",
             "old_fact": {"year": 2012, "text": "Pandas is the ubiquitous and heavily-cited industry standard for high-performance tabular data manipulation in Python.", "entity": "Pandas"},
             "new_fact": {"year": 2025, "text": "Polars has emerged as the high-speed replacement for Pandas, utilizing a Rust-backed engine for massively parallel data processing.", "entity": "Polars"}
         },
         {
-             "query": "What is the preferred consensus mechanism for modern blockchains?",
+             "query": "What is the preferred consensus mechanism for modern blockchains today?",
              "topic": "crypto",
              "old_fact": {"year": 2010, "text": "Proof of Work (PoW) is the only proven and maximally secure consensus mechanism for decentralized distributed ledgers.", "entity": "Proof of Work"},
              "new_fact": {"year": 2024, "text": "Post-Ethereum merge, Proof of Stake (PoS) has become the dominant, energy-efficient standard for most new and active blockchain networks.", "entity": "Proof of Stake"}
@@ -96,8 +96,19 @@ def build_adversarial_tcb():
             text=item["query"],
             intent="fresh",
             topic=item["topic"],
-            target_ids=[c2_id] # THE NEW ONE IS THE ONLY CORRECT ONE FOR 'BEST ... TODAY'
+            target_ids=[c2_id]
         )
+
+    # 5. HISTORICAL INTENT (Test Inversion)
+    h_query = "How was data originally fetched in React before hooks?"
+    h_q_id = "TCB_Q999_hist"
+    queries[h_q_id] = BenchmarkQuery(
+        query_id=h_q_id,
+        text=h_query,
+        intent="historical",
+        topic="web",
+        target_ids=["TCB_C001_trap"] # We WANT the 2017 fact here
+    )
 
     return chunks, queries
 

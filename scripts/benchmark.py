@@ -39,27 +39,24 @@ def mrr(relevant_ids, retrieved_ids):
         if rid in relevant_set: return 1.0 / (i + 1)
     return 0.0
 
-def temporal_freshness(retrieved_ids, chunk_map, k=TOP_K):
+def mean_document_age(retrieved_ids, chunk_map, k=TOP_K):
     now = datetime.now(timezone.utc)
-    scores = []
+    ages = []
     for rid in retrieved_ids[:k]:
+        if not rid: continue
         chunk = chunk_map.get(rid)
         if chunk:
-            age_days = (now - chunk.timestamp).total_seconds() / 86400
-            scores.append(1.0 / (1.0 + age_days))
-    return float(np.mean(scores)) if scores else 0.0
+            age_years = (now - chunk.timestamp).total_seconds() / (86400 * 365)
+            ages.append(age_years)
+    return float(np.mean(ages)) if ages else 0.0
 
 def aggregate_results(runs: List[Dict]) -> Dict:
-    """
-    Computes summary metrics from a list of per-query benchmark results.
-    """
     summary = defaultdict(lambda: defaultdict(list))
     for r in runs:
-        # Normalize keys to what the metrics loop expects
         intent = r.get("intent", "static")
         summary[intent]["ndcg_delta"].append(r["halflife"]["ndcg"] - r["baseline"]["ndcg"])
         summary[intent]["mrr_delta"].append(r["halflife"]["mrr"] - r["baseline"]["mrr"])
-        summary[intent]["tf_delta"].append(r["halflife"]["tf"] - r["baseline"]["tf"])
+        summary[intent]["age_delta"].append(r["halflife"]["age"] - r["baseline"]["age"])
         # Individual averages
         summary[intent]["h_ndcg"].append(r["halflife"]["ndcg"])
         summary[intent]["b_ndcg"].append(r["baseline"]["ndcg"])
@@ -75,10 +72,14 @@ def main(
     decay_type:  Optional[str] = None,
     qdrant_url:  str = "http://localhost:6333",
     redis_url:   str = "redis://localhost:6379",
+    debug:       bool = False,
 ):
     """
     Main entry point for benchmarking.
     """
+    if debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        
     logger.info("🚀 Starting HalfLife Research Benchmark...")
     chunks, queries = build_corpus()
     chunk_map = {c.chunk_id: c for c in chunks}
@@ -90,11 +91,23 @@ def main(
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
     if not skip_ingest:
+        logger.info(f"Wiping collection '{COLLECTION_NAME}' for clean benchmark...")
+        try:
+            qdrant.delete_collection(COLLECTION_NAME)
+        except Exception:
+            pass # Collection might not exist yet
+            
         ingestor = HalfLifeIngestor(qdrant_url=qdrant_url, redis_url=redis_url)
         logger.info(f"Ingesting {len(chunks)} chunks...")
         id_map = {}
         for i, chunk in enumerate(chunks):
-            assigned_id = ingestor.ingest(text=chunk.text, timestamp=chunk.timestamp, doc_type=chunk.doc_type, decay_type=decay_type)
+            assigned_id = ingestor.ingest(
+                text=chunk.text, 
+                timestamp=chunk.timestamp, 
+                doc_type=chunk.doc_type, 
+                decay_type=decay_type,
+                original_id=chunk.chunk_id
+            )
             id_map[chunk.chunk_id] = assigned_id
             if (i+1) % 50 == 0: logger.info(f"  ...ingested {i+1}")
     else:
@@ -116,14 +129,15 @@ def main(
                 "baseline": {
                     "ndcg": ndcg_at_k(sample.target_ids, [r.payload.get("original_id") for r in q_points]),
                     "mrr":  mrr(sample.target_ids, [r.payload.get("original_id") for r in q_points]),
-                    "tf":   temporal_freshness([r.payload.get("original_id") for r in q_points], chunk_map)
+                    "age":   mean_document_age([r.payload.get("original_id") for r in q_points], chunk_map)
                 },
                 "halflife": {
                     "ndcg": ndcg_at_k(sample.target_ids, [r.get("original_id") for r in hl_res["reranked_chunks"]]),
                     "mrr":  mrr(sample.target_ids, [r.get("original_id") for r in hl_res["reranked_chunks"]]),
-                    "tf":   temporal_freshness([r.get("original_id") for r in hl_res["reranked_chunks"]], chunk_map)
+                    "age":   mean_document_age([r.get("original_id") for r in hl_res["reranked_chunks"]], chunk_map)
                 }
-            }
+            },
+            "intent": cl["intent"]
         })
 
     # Aggregator & Summary Table
@@ -140,19 +154,32 @@ def main(
 
     for intent, items in results.items():
         if not items: continue
-        for met in ["ndcg", "mrr", "tf"]:
+        for met in ["ndcg", "mrr", "age"]:
             b_vals = [it["metrics"]["baseline"][met] for it in items]
             h_vals = [it["metrics"]["halflife"][met] for it in items]
             
             b_avg, h_avg = np.mean(b_vals), np.mean(h_vals)
-            gain = ((h_avg / b_avg) - 1.0) * 100 if b_avg > 0 else 0.0
             
+            if met == "age":
+                # For FRESH, lower age is better. For HISTORICAL, higher age is better.
+                if intent == "fresh":
+                    gain = ((b_avg - h_avg) / b_avg * 100) if b_avg > 0 else 0.0
+                    gain_label = f"{gain:+.1f}% Freshness"
+                else:
+                    gain = ((h_avg - b_avg) / b_avg * 100) if b_avg > 0 else 0.0
+                    gain_label = f"{gain:+.1f}% Historical"
+                label = "AGE (YRS)"
+            else:
+                gain = ((h_avg / b_avg) - 1.0) * 100 if b_avg > 0 else 0.0
+                gain_label = f"{gain:+.1f}%"
+                label = met.upper()
+
             summary.add_row(
                 intent.upper(),
-                met.upper(),
+                label,
                 f"{b_avg:.4f}",
                 f"{h_avg:.4f}",
-                f"{gain:+.1f}%"
+                gain_label
             )
         summary.add_section()
 
@@ -169,5 +196,11 @@ if __name__ == "__main__":
     parser.add_argument("--skip-ingest", action="store_true")
     parser.add_argument("--output")
     parser.add_argument("--decay-type")
+    parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
-    main(skip_ingest=args.skip_ingest, output=args.output, decay_type=args.decay_type)
+    
+    if args.debug:
+        logging.getLogger("engine").setLevel(logging.DEBUG)
+        logging.getLogger("scripts").setLevel(logging.DEBUG)
+        
+    main(skip_ingest=args.skip_ingest, output=args.output, decay_type=args.decay_type, debug=args.debug)

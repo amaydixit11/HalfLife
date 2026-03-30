@@ -23,7 +23,7 @@ class DocTypeClassifier:
             return {
                 "doc_type": "news",
                 "decay_type": "exponential",
-                "decay_params": {"lambda": 1e-5}, # ~1 day half-life
+                "decay_params": {"lambda": 1e-8}, # ~2 year half-life
                 "trust_score": 0.6
             }
         
@@ -32,7 +32,7 @@ class DocTypeClassifier:
             return {
                 "doc_type": "documentation",
                 "decay_type": "piecewise",
-                "decay_params": {}, # Using defaults in piecewise
+                "decay_params": {}, 
                 "trust_score": 0.8
             }
         
@@ -41,7 +41,7 @@ class DocTypeClassifier:
             return {
                 "doc_type": "research",
                 "decay_type": "exponential",
-                "decay_params": {"lambda": 1e-7}, # Landmark papers
+                "decay_params": {"lambda": 1e-9}, # ~20 year half-life
                 "trust_score": 0.9
             }
             
@@ -49,6 +49,6 @@ class DocTypeClassifier:
         return {
             "doc_type": "generic",
             "decay_type": "exponential",
-            "decay_params": {"lambda": 1e-6}, # ~8 days half-life
+            "decay_params": {"lambda": 5e-9}, # ~4 year half-life
             "trust_score": 0.5
         }

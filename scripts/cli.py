@@ -19,6 +19,7 @@ def main():
     bench_parser.add_argument("--output", type=str, help="Save summary to JSON")
     bench_parser.add_argument("--skip-ingest", action="store_true", help="Skip re-ingesting corpus")
     bench_parser.add_argument("--decay-type", choices=["exponential", "linear", "learned"], default="exponential")
+    bench_parser.add_argument("--debug", action="store_true", help="Enable verbose scoring logs")
 
     # --- CLI: evaluate (Research Mode) ---
     eval_parser = subparsers.add_parser("evaluate", help="Research Ablation on Temporal QA")
@@ -52,7 +53,8 @@ def main():
             benchmark_func(
                 output=args.output,
                 skip_ingest=args.skip_ingest,
-                decay_type=args.decay_type
+                decay_type=args.decay_type,
+                debug=args.debug
             )
         except Exception as e:
             print(f"❌ Benchmark failed: {e}")
