@@ -11,21 +11,9 @@ class CorpusChunk:
     doc_type:      str
     source_domain: str
     topic:         str = "generic"
-    vintage:       str = "recent" # 'recent', 'mid', 'old'
+    vintage:       str = "recent" # 'recent', 'old'
     is_decoy:      bool = False
-
-def _vintage_timestamp(vintage: str, offset: int = 0) -> datetime:
-    now = datetime.now(timezone.utc)
-    if vintage == "recent": return now - timedelta(days=7 + offset)
-    if vintage == "mid":    return now - timedelta(days=365 + offset)
-    if vintage == "old":    return now - timedelta(days=365*10 + offset)
-    return now
-
-def primary_chunks(chunks: List[CorpusChunk]) -> List[CorpusChunk]:
-    return [c for c in chunks if not c.is_decoy]
-
-def decoy_chunks(chunks: List[CorpusChunk]) -> List[CorpusChunk]:
-    return [c for c in chunks if c.is_decoy]
+    is_adversarial_trap: bool = False
 
 @dataclass
 class BenchmarkQuery:
@@ -33,57 +21,86 @@ class BenchmarkQuery:
     text:         str
     intent:       str
     topic:        str
-    relevant_ids: List[str]
+    target_ids:   List[str]
 
-def build_tiered_corpus(dataset_path: str = "scripts/temporal_qa.json") -> (List[CorpusChunk], Dict[str, BenchmarkQuery]):
-    with open(dataset_path, "r") as f:
-        dataset = json.load(f)
+def build_adversarial_tcb():
+    """
+    Builds the 'Temporal Confusion Benchmark' (TCB).
+    Specifically designed to break baseline RAG by providing older, 
+    highly-authoritative documents vs newer, slightly noisier truths.
+    """
+    now = datetime.now(timezone.utc)
+    
+    # 10 KILLER QUERIES
+    dataset = [
+        {
+            "query": "What is the state-of-the-art model for NLP tasks?",
+            "topic": "nlp",
+            "old_fact": {"year": 2018, "text": "BERT (Bidirectional Encoder Representations from Transformers) is the revolutionary state-of-the-art standard for all NLP tasks, providing unprecedented context awareness.", "entity": "BERT"},
+            "new_fact": {"year": 2026, "text": "Current SOTA benchmarks in 2026 are dominated by GPT-5 and Claude-4, which have long surpassed 2010s transformer models in reasoning and zero-shot performance.", "entity": "GPT-5/Claude-4"}
+        },
+        {
+            "query": "Recommended way to fetch data in a React application?",
+            "topic": "web",
+            "old_fact": {"year": 2017, "text": "The canonical way to fetch data in React is inside the componentDidMount lifecycle method using the native Fetch API or Axios.", "entity": "componentDidMount"},
+            "new_fact": {"year": 2026, "text": "In modern React (2026), data fetching is primarily handled via Server Components or the 'use' hook for client-side suspense-ready integration.", "entity": "Server Components"}
+        },
+        {
+            "query": "Best library for tabular data processing in Python?",
+            "topic": "python",
+            "old_fact": {"year": 2012, "text": "Pandas is the ubiquitous and heavily-cited industry standard for high-performance tabular data manipulation in Python.", "entity": "Pandas"},
+            "new_fact": {"year": 2025, "text": "Polars has emerged as the high-speed replacement for Pandas, utilizing a Rust-backed engine for massively parallel data processing.", "entity": "Polars"}
+        },
+        {
+             "query": "What is the preferred consensus mechanism for modern blockchains?",
+             "topic": "crypto",
+             "old_fact": {"year": 2010, "text": "Proof of Work (PoW) is the only proven and maximally secure consensus mechanism for decentralized distributed ledgers.", "entity": "Proof of Work"},
+             "new_fact": {"year": 2024, "text": "Post-Ethereum merge, Proof of Stake (PoS) has become the dominant, energy-efficient standard for most new and active blockchain networks.", "entity": "Proof of Stake"}
+        }
+    ]
 
     chunks = []
     queries = {}
-    
-    for i, sample in enumerate(dataset):
-        q_id = f"Q{i:03d}"
-        q_year = int(sample["timestamp"])
-        truth = sample["ground_truth"]
-        q_topic = sample["topic"]
+
+    for i, item in enumerate(dataset):
+        q_id = f"TCB_Q{i:03d}"
         
-        # 1. THE ERA-SPECIFIC GOLD CHUNK (The one we WANT)
-        c1_id = f"C{i:03d}_gold"
+        # 1. THE TRAP (Old, Authoritative)
+        c1_id = f"TCB_C{i:03d}_trap"
         chunks.append(CorpusChunk(
             chunk_id=c1_id,
-            text=f"Technical Archive [{q_year}]: During this period, the officially recognized answer to {sample['query']} was {truth}. This fact is established by contemporary records.",
-            timestamp=datetime(q_year, 1, 1, tzinfo=timezone.utc),
+            text=f"AUTHORITATIVE ARCHIVE [{item['old_fact']['year']}]: {item['old_fact']['text']}",
+            timestamp=datetime(item['old_fact']['year'], 1, 1, tzinfo=timezone.utc),
             doc_type="research",
-            source_domain="gold-archive",
-            topic=q_topic,
+            source_domain="textbook-archive",
+            topic=item["topic"],
             vintage="old",
-            is_decoy=False
+            is_adversarial_trap=True
         ))
 
-        # 2. THE RECENT TEMPORAL DECOY (The one that DISTRACTS the baseline)
-        c2_id = f"C{i:03d}_decoy"
-        recent_year = 2026
+        # 2. THE TRUTH (New, slightly more conversational/noisy)
+        c2_id = f"TCB_C{i:03d}_truth"
         chunks.append(CorpusChunk(
             chunk_id=c2_id,
-            text=f"Modern Update [{recent_year}]: Contemporary discussions on {sample['query']} now emphasize Entity_Prime_Active_Latest, replacing outdated 20th-century models.",
-            timestamp=datetime(recent_year, 12, 31, tzinfo=timezone.utc),
+            text=f"MODERN UPDATE: {item['new_fact']['text']}",
+            timestamp=datetime(item['new_fact']['year'], 1, 1, tzinfo=timezone.utc),
             doc_type="news",
-            source_domain="recent-updates",
-            topic=q_topic,
+            source_domain="community-docs",
+            topic=item["topic"],
             vintage="recent",
-            is_decoy=True
+            is_adversarial_trap=False
         ))
 
         queries[q_id] = BenchmarkQuery(
             query_id=q_id,
-            text=sample["query"],
-            intent=sample["type"],
-            topic=q_topic,
-            relevant_ids=[c1_id] 
+            text=item["query"],
+            intent="fresh",
+            topic=item["topic"],
+            target_ids=[c2_id] # THE NEW ONE IS THE ONLY CORRECT ONE FOR 'BEST ... TODAY'
         )
 
     return chunks, queries
 
 def build_corpus():
-    return build_tiered_corpus()
+    # Use the Adversarial TCB as the primary evaluation set
+    return build_adversarial_tcb()

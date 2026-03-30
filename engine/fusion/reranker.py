@@ -156,9 +156,13 @@ class Reranker:
         v_scores = [r["v"] for r in raw_results]
         t_scores = [r["t"] for r in raw_results]
         
+        logger.debug(f"Fusion batch: weights={weights}, v_range=[{min(v_scores):.4f}, {max(v_scores):.4f}], t_range=[{min(t_scores):.4f}, {max(t_scores):.4f}]")
+
         def norm(val, vals):
-            if not vals or max(vals) == min(vals): return 0.5
-            return (val - min(vals)) / (max(vals) - min(vals))
+            if not vals: return 0.5
+            v_max, v_min = max(vals), min(vals)
+            if v_max == v_min: return 0.5
+            return (val - v_min) / (v_max - v_min)
 
         final_chunks = []
         for r in raw_results:
@@ -167,6 +171,8 @@ class Reranker:
             tn = norm(r["t"], t_scores)
             
             final_score = (weights["vector"] * vn + weights["temporal"] * tn + weights["trust"] * r["tr"])
+            
+            logger.debug(f"Chunk {r['id'][:8]}: raw_v={r['v']:.4f}, raw_t={r['t']:.4e} -> vn={vn:.4f}, tn={tn:.4f} -> final={final_score:.4f}")
 
             final_chunks.append({
                 "id":             r["id"],

@@ -45,14 +45,7 @@ class QueryIntentClassifier:
         """
         q = query.lower()
         
-        # 1. Stability Override: If looking for 'Best'/'Stable' -> Use Static
-        if any(kw in q for kw in self.STATIC_KEYWORDS):
-            return {
-                "intent": "static",
-                "weights": self.intent_weights["static"],
-            }
-
-        # 2. Date Detection: If user specifies a year in the past -> Historical
+        # 1. Date Detection: If user specifies a year in the past -> Historical
         years = re.findall(r"\b(19\d{2}|20[0-1]\d|202[0-3])\b", q)
         if years:
             return {
@@ -60,21 +53,28 @@ class QueryIntentClassifier:
                 "weights": self.intent_weights["historical"],
             }
 
-        # 3. Freshness Detection
+        # 2. Freshness Detection (e.g. 'today', 'latest', 'sota')
         if any(kw in q for kw in self.FRESH_KEYWORDS):
             return {
                 "intent": "fresh",
                 "weights": self.intent_weights["fresh"],
             }
 
-        # 4. Historical Keyword Detection
+        # 3. Historical Keyword Detection
         if any(kw in q for kw in self.HISTORICAL_KEYWORDS):
             return {
                 "intent": "historical",
                 "weights": self.intent_weights["historical"],
             }
 
-        # Default: static / time-agnostic
+        # 4. Stability Logic: If NONE of the above hit, and user asks for 'best'/'stable'
+        if any(kw in q for kw in self.STATIC_KEYWORDS):
+            return {
+                "intent": "static",
+                "weights": self.intent_weights["static"],
+            }
+
+        # Default: time-agnostic
         return {
             "intent": "static",
             "weights": self.intent_weights["static"],
