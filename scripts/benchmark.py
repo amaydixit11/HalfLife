@@ -54,12 +54,14 @@ def aggregate_results(runs: List[Dict]) -> Dict:
     summary = defaultdict(lambda: defaultdict(list))
     for r in runs:
         intent = r.get("intent", "static")
-        summary[intent]["ndcg_delta"].append(r["halflife"]["ndcg"] - r["baseline"]["ndcg"])
-        summary[intent]["mrr_delta"].append(r["halflife"]["mrr"] - r["baseline"]["mrr"])
-        summary[intent]["age_delta"].append(r["halflife"]["age"] - r["baseline"]["age"])
+        metrics = r.get("metrics", {})
+        if not metrics: continue
+        summary[intent]["ndcg_delta"].append(metrics["halflife"]["ndcg"] - metrics["baseline"]["ndcg"])
+        summary[intent]["mrr_delta"].append(metrics["halflife"]["mrr"] - metrics["baseline"]["mrr"])
+        summary[intent]["age_delta"].append(metrics["halflife"]["age"] - metrics["baseline"]["age"])
         # Individual averages
-        summary[intent]["h_ndcg"].append(r["halflife"]["ndcg"])
-        summary[intent]["b_ndcg"].append(r["baseline"]["ndcg"])
+        summary[intent]["h_ndcg"].append(metrics["halflife"]["ndcg"])
+        summary[intent]["b_ndcg"].append(metrics["baseline"]["ndcg"])
 
     agg = {}
     for intent, mets in summary.items():

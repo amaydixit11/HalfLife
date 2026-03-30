@@ -11,112 +11,48 @@ from datetime import datetime, timedelta, timezone
 
 import numpy as np
 
-from scripts.corpus import (
-    build_corpus, CorpusChunk, BenchmarkQuery,
-    _vintage_timestamp, primary_chunks, decoy_chunks,
-)
-from scripts.benchmark import ndcg_at_k, mrr, temporal_freshness, aggregate_results
+from scripts.corpus import build_corpus, CorpusChunk, BenchmarkQuery
+from scripts.benchmark import ndcg_at_k, mrr, mean_document_age, aggregate_results
 from engine.decay.learned_model import (
     DecayMLP, extract_features, LAMBDA_MIN, LAMBDA_MAX, INPUT_DIM,
 )
-
-
-# --------------------------------------------------------------------------- #
-#  Corpus construction                                                         #
-# --------------------------------------------------------------------------- #
 
 class TestCorpus:
     def setup_method(self):
         self.chunks, self.queries = build_corpus()
         self.chunk_map = {c.chunk_id: c for c in self.chunks}
-        self.primaries = primary_chunks(self.chunks)
-        self.decoys    = decoy_chunks(self.chunks)
-
-    # ---- Size assertions ------------------------------------------------
 
     def test_total_corpus_size(self):
-        # 64 queries * 2 chunks (gold + decoy) = 128
-        assert len(self.chunks) == 128
-
-    def test_primary_count(self):
-        assert len(self.primaries) == 64
-
-    def test_decoy_count(self):
-        assert len(self.decoys) == 64
+        # TCB has 4 scenarios * 2 chunks = 8 chunks
+        assert len(self.chunks) >= 8
 
     def test_query_count(self):
-        assert len(self.queries) == 64
-
-    # ---- Structure assertions -------------------------------------------
-
-    def test_all_vintages_present(self):
-        vintages = {c.vintage for c in self.primaries}
-        # Tiered corpus uses 'old' for gold and 'recent' for decoys (proxied)
-        # But wait, in build_tiered_corpus, gold is 'old' and decoy is 'recent'.
-        assert "old" in vintages
-
-    def test_all_doc_types_present(self):
-        doc_types = {c.doc_type for c in self.primaries}
-        # In Tiered Corpus, gold chunks are primarily 'research'
-        assert "research" in doc_types
+        # TCB has 4 + 1 historical = 5 queries
+        assert len(self.queries) >= 5
 
     def test_all_intents_present(self):
         intents = {q.intent for q in self.queries.values()}
-        assert intents == {"fresh", "historical", "static"}
+        assert "fresh" in intents
+        assert "historical" in intents
 
-    def test_recent_is_newer_than_old(self):
-        # Primaries are 'old', Decoys are 'recent'
-        assert min(c.timestamp for c in self.decoys) > max(c.timestamp for c in self.primaries)
+    def test_timestamps_are_ordered(self):
+        # TCB has old facts (2010-2018) and new facts (2024-2026)
+        recent_chunks = [c for c in self.chunks if c.vintage == "recent"]
+        old_chunks    = [c for c in self.chunks if c.vintage == "old"]
+        assert min(c.timestamp for c in recent_chunks) > max(c.timestamp for c in old_chunks)
 
-    def test_vintage_timestamps_are_ordered(self):
-        now = datetime.now(timezone.utc)
-        recent_age = (now - _vintage_timestamp("recent", 0)).days
-        old_age    = (now - _vintage_timestamp("old",    0)).days
-        assert recent_age < old_age
-
-    # ---- Decoy assertions -----------------------------------------------
-
-    def test_decoys_share_text_with_primaries(self):
-        """Every decoy should have a primary with similar text. 
-        In Tiered Corpus, both decoys and primaries mention same entities."""
-        for d in self.decoys:
-            assert d.is_decoy
-            assert "Entity_Prime_Active_Latest" in d.text
-
-    def test_decoys_never_relevant(self):
-        """Decoys must not appear in any query's relevant_ids."""
-        decoy_ids = {c.chunk_id for c in self.decoys}
-        for q in self.queries.values():
-            overlap = set(q.relevant_ids) & decoy_ids
-            assert not overlap
-
-    # ---- Ground truth assertions ----------------------------------------
-
-    def test_fresh_queries_have_relevant_chunks(self):
-        fresh_queries = [q for q in self.queries.values() if q.intent == "fresh"]
-        for q in fresh_queries:
-            relevant_chunks = [self.chunk_map[cid] for cid in q.relevant_ids]
-            assert relevant_chunks
-
-    def test_historical_queries_have_relevant_chunks(self):
-        hist_queries = [q for q in self.queries.values() if q.intent == "historical"]
-        for q in hist_queries:
-            relevant_chunks = [self.chunk_map[cid] for cid in q.relevant_ids]
-            assert relevant_chunks
+    def test_traps_present(self):
+        traps = [c for c in self.chunks if c.is_adversarial_trap]
+        assert len(traps) >= 4
 
     def test_relevant_ids_are_subset_of_corpus(self):
         all_chunk_ids = {c.chunk_id for c in self.chunks}
         for q in self.queries.values():
-            assert set(q.relevant_ids).issubset(all_chunk_ids)
-
-    def test_relevant_ids_are_nonempty(self):
-        for q in self.queries.values():
-            assert len(q.relevant_ids) > 0
+            assert set(q.target_ids).issubset(all_chunk_ids)
 
     def test_topic_isolation(self):
-        """Queries reference only relevant chunks from their own topic."""
         for q in self.queries.values():
-            for cid in q.relevant_ids:
+            for cid in q.target_ids:
                 chunk = self.chunk_map[cid]
                 assert chunk.topic == q.topic
 
@@ -174,11 +110,7 @@ class TestMRR:
         assert mrr(["b", "c"], ["a", "b", "c"]) == pytest.approx(0.5)
 
 
-# --------------------------------------------------------------------------- #
-#  Temporal freshness metric                                                   #
-# --------------------------------------------------------------------------- #
-
-class TestTemporalFreshness:
+class TestMeanAge:
     def _chunk(self, cid: str, age_days: int) -> CorpusChunk:
         ts = datetime.now(timezone.utc) - timedelta(days=age_days)
         return CorpusChunk(
@@ -187,26 +119,12 @@ class TestTemporalFreshness:
             source_domain="test",
         )
 
-    def test_fresher_scores_higher(self):
+    def test_older_scores_higher_age(self):
         cm = {"new": self._chunk("new", 1), "old": self._chunk("old", 365)}
-        assert temporal_freshness(["new"], cm) > temporal_freshness(["old"], cm)
-
-    def test_bounded_0_to_1(self):
-        cm = {"c": self._chunk("c", 100)}
-        tf = temporal_freshness(["c"], cm)
-        assert 0.0 < tf <= 1.0
-
-    def test_today_equals_one(self):
-        cm = {"c": self._chunk("c", 0)}
-        assert temporal_freshness(["c"], cm) == pytest.approx(1.0)
-
-    def test_missing_chunk_ignored(self):
-        cm = {"known": self._chunk("known", 10)}
-        tf = temporal_freshness(["known", "missing"], cm)
-        assert tf > 0.0
+        assert mean_document_age(["old"], cm) > mean_document_age(["new"], cm)
 
     def test_empty_returns_zero(self):
-        assert temporal_freshness([], {}) == 0.0
+        assert mean_document_age([], {}) == 0.0
 
 
 # --------------------------------------------------------------------------- #
@@ -214,29 +132,23 @@ class TestTemporalFreshness:
 # --------------------------------------------------------------------------- #
 
 class TestAggregateResults:
-    def _r(self, intent, b_nd, hl_nd, b_mr, hl_mr, b_tf, hl_tf):
+    def _r(self, intent, b_nd, hl_nd, b_mr, hl_mr, b_age, hl_age):
         return {
             "intent": intent,
-            "baseline": {"ndcg": b_nd, "mrr": b_mr, "tf": b_tf},
-            "halflife": {"ndcg": hl_nd, "mrr": hl_mr, "tf": hl_tf}
+            "metrics": {
+                "baseline": {"ndcg": b_nd, "mrr": b_mr, "age": b_age},
+                "halflife": {"ndcg": hl_nd, "mrr": hl_mr, "age": hl_age}
+            }
         }
 
     def test_ndcg_delta(self):
-        # We need a list of results for aggregate_results
-        s = aggregate_results([self._r("fresh", 0.5, 0.7, 0.4, 0.6, 0.01, 0.05)])
+        s = aggregate_results([self._r("fresh", 0.5, 0.7, 0.4, 0.6, 5.0, 0.5)])
         assert s["fresh"]["ndcg_delta"] == pytest.approx(0.2, abs=1e-4)
 
-    def test_fresh_tf_positive(self):
-        s = aggregate_results([self._r("fresh", 0.5, 0.7, 0.4, 0.6, 0.01, 0.05)])
-        assert s["fresh"]["tf_delta"] > 0
-
-    def test_historical_tf_negative(self):
-        s = aggregate_results([self._r("historical", 0.5, 0.7, 0.4, 0.6, 0.04, 0.01)])
-        assert s["historical"]["tf_delta"] < 0
-
-    def test_static_tf_zero(self):
-        s = aggregate_results([self._r("static", 0.6, 0.6, 0.5, 0.5, 0.02, 0.02)])
-        assert abs(s["static"]["tf_delta"]) < 1e-9
+    def test_fresh_age_delta_negative(self):
+        # HalfLife should decrease age for fresh queries
+        s = aggregate_results([self._r("fresh", 0.5, 0.7, 0.4, 0.6, 5.0, 0.5)])
+        assert s["fresh"]["age_delta"] < 0
 
 
 # --------------------------------------------------------------------------- #

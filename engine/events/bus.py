@@ -8,6 +8,10 @@ class EventBus:
     def __init__(self, store: RedisStore):
         self.store = store
 
+    def invalidate(self, chunk_id: str, strategy: str = "hard", reason: str = None):
+        """ Alias for handle_invalidation to match API contract. """
+        return self.handle_invalidation(chunk_id, type=strategy, reason=reason)
+
     def handle_invalidation(self, chunk_id: str, type: str = "hard", reason: str = None):
         """
         Processes hard or soft invalidation.
