@@ -21,12 +21,21 @@ class HalfLife:
         >>> reranked = hl.rerank(query="latest GNNs", chunks=qdrant_results)
     """
 
-    def __init__(self, qdrant_url="http://localhost:6333", redis_url="redis://localhost:6379"):
+    def __init__(self, qdrant_url: Optional[str] = "http://localhost:6333", redis_url: str = "redis://localhost:6379", qdrant_client: Optional[any] = None):
         self.store = RedisStore(url=redis_url)
         self.reranker = Reranker(self.store)
         self.classifier = QueryIntentClassifier()
-        self.ingestor = HalfLifeIngestor(qdrant_url=qdrant_url, redis_url=redis_url)
-
+        self.ingestor = HalfLifeIngestor(qdrant_url=qdrant_url, redis_url=redis_url, client=qdrant_client)
+    def rerank(self, query: str, chunks: List[Dict], intent: Optional[str] = None, top_k: int = 5):
+        """
+        Rerank standard vector search hits using temporal fusion.
+        
+        Args:
+            query: The user's natural language query.
+            chunks: A list of dicts (or Qdrant ScoredPoints) with "id" and "score".
+            intent: Optional intent override (e.g. "latest", "historical").
+            top_k: Number of results to return.
+        """
         # Normalization: Handle ScoredPoints or other objects from Qdrant/Pinecone/LangChain
         normalized_chunks = []
         for c in chunks:

@@ -1,0 +1,5 @@
+sentence-transformers
+qdrant-client
+numpy
+openai
+halflife-rag

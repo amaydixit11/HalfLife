@@ -28,7 +28,10 @@ class ResearchEvaluator:
     """
 
     def __init__(self, qdrant_url="http://localhost:6333"):
-        self.qdrant = QdrantClient(url=qdrant_url)
+        if qdrant_url:
+            self.qdrant = QdrantClient(url=qdrant_url)
+        else:
+            self.qdrant = QdrantClient(":memory:")
         self.store = RedisStore()
         self.reranker = Reranker(self.store)
         self.classifier = QueryIntentClassifier()

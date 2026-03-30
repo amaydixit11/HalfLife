@@ -31,10 +31,17 @@ class HalfLifeIngestor:
 
     def __init__(
         self,
-        qdrant_url: str = "http://localhost:6333",
+        qdrant_url: Optional[str] = "http://localhost:6333",
         redis_url:  str = "redis://localhost:6379",
+        client:     Optional[QdrantClient] = None,
     ):
-        self.qdrant     = QdrantClient(url=qdrant_url)
+        if client:
+            self.qdrant = client
+        elif qdrant_url == ":memory:":
+            self.qdrant = QdrantClient(":memory:")
+        else:
+            self.qdrant = QdrantClient(url=qdrant_url)
+            
         self.redis      = RedisStore(url=redis_url)
         self.model      = SentenceTransformer("all-MiniLM-L6-v2")
         self.classifier = DocTypeClassifier()
