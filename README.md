@@ -1,4 +1,6 @@
 # 🚀 HalfLife
+<img width="516" height="484" alt="halflife-removebg-preview" src="https://github.com/user-attachments/assets/8273f9e0-aa9c-4602-b3af-9c9cbd6b3e83" />
+
 
 **Stop your RAG from returning wrong answers due to time.** 
 
