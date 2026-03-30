@@ -34,7 +34,7 @@ def run_viral_demo():
         },
         {
             "name": "Web Dev: The Legacy Bias",
-            "query": "Latest way to fetch data in React?",
+            "query": "Latest way to fetch data in React today?",
             "docs": [
                 {"year": 2017, "entity": "componentDidMount", "text": "The canonical way to fetch data in React is inside the componentDidMount method.", "score": 0.96},
                 {"year": 2026, "entity": "Server Components", "text": "Modern React handles data fetching primarily via Server Components or 'use' hook.", "score": 0.91}
@@ -50,7 +50,7 @@ def run_viral_demo():
         },
         {
             "name": "Blockchain: The Consensus Shift",
-            "query": "Current dominant blockchain consensus mechanism?",
+            "query": "Current dominant blockchain consensus mechanism today?",
             "docs": [
                 {"year": 2010, "entity": "Proof of Work", "text": "PoW is the uniquely secure consensus mechanism at the core of all major chains.", "score": 0.99},
                 {"year": 2024, "entity": "Proof of Stake", "text": "Following the Merge, PoS is the global energy-efficient consensus standard.", "score": 0.92}
@@ -58,7 +58,7 @@ def run_viral_demo():
         },
         {
             "name": "Data: The Rust Replacement",
-            "query": "Best library for tabular data in Python?",
+            "query": "Best library for tabular data in Python today?",
             "docs": [
                 {"year": 2008, "entity": "Pandas", "text": "Pandas is the ubiquitous and heavily-cited standard for data manipulation.", "score": 0.98},
                 {"year": 2024, "entity": "Polars", "text": "Polars is the high-speed replacement engine utilizing a Rust-backed parallel core.", "score": 0.91}
@@ -86,17 +86,19 @@ def run_viral_demo():
         console.print("\n   [dim]Standard RAG ranking:[/dim]")
         for i, h in enumerate(baseline_hits[:2]):
              color = "red" if h["year"] < 2024 else "green"
-             console.print(f"      #{i+1} [{color}]{h['entity']} ({h['year']})[/color] - Score: {h['score']}")
+             msg = f"      #{i+1} {h['entity']} ({h['year']}) - Score: {h['score']}"
+             console.print(msg, style=color)
 
         # 3. RUN HALFLIFE
         reranked = hl.rerank(query=scenario["query"], chunks=q_hits, top_k=2)
         console.print("\n   [bold green]HalfLife Temporal Fusion:[/bold green]")
         for i, chunk in enumerate(reranked[:2]):
             text = chunk.get("text", "")
-            year = text.split("[")[1].split("]")[0]
-            entity = [d["entity"] for d in scenario["docs"] if str(d["year"]) == year][0]
-            color = "green" if int(year) >= 2024 else "red"
-            console.print(f"      #{i+1} [{color}]{entity} ({year})[/color] - Score: {chunk.get('final_score')}")
+            year = int(text.split("[")[1].split("]")[0])
+            entity = [d["entity"] for d in scenario["docs"] if d["year"] == year][0]
+            color = "green" if year >= 2024 else "red"
+            msg = f"      #{i+1} {entity} ({year}) - Score: {chunk.get('final_score')}"
+            console.print(msg, style=color)
 
         if int(reranked[0].get("text", "").split("[")[1].split("]")[0]) >= 2024:
             console.print(f"\n   [bold green]✅ FIX: HalfLife broke the 'Authority Trap' and surfaced the latest truth.[/bold green]")
