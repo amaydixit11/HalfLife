@@ -1,6 +1,18 @@
-# HalfLife 🧱
+# 🚀 HalfLife
 
-**The Temporal-Aware Ranking Engine. Fixing the "Latest vs. Greatest" problem in RAG.**
+**Stop your RAG from returning wrong answers due to time.** 
+
+HalfLife is the temporal-aware reranking engine that fixes the "Latest vs. Greatest" problem in RAG pipelines. It prevents your system from silently failing when old, authoritative facts override new, relevant truths.
+
+## ⚠️ The Problem: Your RAG is Time-Blind
+
+Standard RAG (Vector Search) is biased toward **Authority**. If a document from 2019 has a higher cosine similarity than one from 2024, your LLM will get the 5-year-old answer every single time.
+
+| Query | Standard RAG Response | HalfLife Response | Status |
+| :--- | :--- | :--- | :--- |
+| "What is the state-of-the-art NLP model?" | **BERT (2019)** ❌ | **GPT-4 (2024)** ✅ | **FIXED** |
+| "Latest React version?" | **React 16** (Highly cited) ❌ | **React 19** (Current) ✅ | **FIXED** |
+| "Who is the CEO of Microsoft?" | **Bill Gates** (Founding) ❌ | **Satya Nadella** (Active) ✅ | **FIXED** |
 
 ## ⚡ Try it in 10 seconds
 
@@ -15,13 +27,8 @@ halflife demo
 
 ---
 
-### 🚨 The Problem: Your RAG is Time-Blind
-
-Traditional RAG systems are **time-blind**. They rank documents solely by semantic similarity, leading to **Temporal Hallucinations**:
-
-*   **Query**: *"What is the state-of-the-art model for NLP?"*
-*   **Retriever**: Finds a highly-cited 2019 paper (BERT) with 0.98 similarity.
-*   **LLM**: *"BERT is the state-of-the-art model."* (❌ **Wrong**: It's half a decade outdated).
+### 🚨 RAG is failing silently due to time.
+Most RAG systems are built on "Static Knowledge" assumptions. But in the real world, facts have an **expiration date**. HalfLife uses **Intent-Aware Temporal Fusion** to dynamically re-weight recency vs. authority based on the user's query.
 
 **HalfLife fixes this.** It adds a temporal ranking layer between your vector store and your LLM, ensuring you always get the **correct fact for the era.**
 
@@ -170,12 +177,28 @@ for chunk in reranked:
 
 ---
 
-## 🏁 Zero-Friction Demo
+## 🔗 Framework Integrations
 
-Experience the "Temporal Travel" win in seconds. This demo ingests conflicting facts (Bill Gates 2000 vs Satya Nadella 2026) and proves HalfLife's ability to "look back" for historical queries.
+HalfLife is designed to be a drop-in component for your existing AI stack.
 
-```bash
-halflife demo
+### ⛓️ LangChain (BaseDocumentCompressor)
+Plug HalfLife directly into your `ContextualCompressionRetriever` to fix temporal hallucinations in any LangChain pipeline.
+
+```python
+from halflife.integrations.langchain import HalfLifeReranker
+from langchain.retrievers import ContextualCompressionRetriever
+
+# 1. Initialize Reranker
+compressor = HalfLifeReranker(top_k=3)
+
+# 2. Wrap your existing retriever
+compression_retriever = ContextualCompressionRetriever(
+    base_compressor=compressor, 
+    base_retriever=my_existing_qdrant_retriever
+)
+
+# 3. Get accurate, era-appropriate documents
+docs = compression_retriever.get_relevant_documents("What is the latest LLM?")
 ```
 
 ---

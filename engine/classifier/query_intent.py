@@ -10,9 +10,10 @@ class QueryIntentClassifier:
     """
 
     FRESH_KEYWORDS = {
-        "latest", "recent", "newest", "current", "now",
-        "today", "this week", "this month", "breaking", "just",
-        "updated", "new", "2024", "2025",
+        "latest", "recent", "newest", "current", "now", "today", 
+        "this week", "this month", "breaking", "just", "updated", 
+        "new", "2024", "2025", "state-of-the-art", "sota", 
+        "modern", "cutting-edge", "today",
     }
 
     HISTORICAL_KEYWORDS = {
