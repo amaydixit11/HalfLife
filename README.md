@@ -1,207 +1,204 @@
-# 🚀 HalfLife
+# HalfLife
+
 <img width="516" height="484" alt="halflife-removebg-preview" src="https://github.com/user-attachments/assets/8273f9e0-aa9c-4602-b3af-9c9cbd6b3e83" />
 
+**Temporal-aware reranking for RAG pipelines. Stops your system from returning outdated answers.**
 
-**Stop your RAG from returning wrong answers due to time.** 
+[![PyPI](https://img.shields.io/pypi/v/halflife-rag)](https://pypi.org/project/halflife-rag/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/amaydixit11/halflife/blob/main/HalfLife_RealWorld_Demo.ipynb)
 
-HalfLife is the temporal-aware reranking engine that fixes the "Latest vs. Greatest" problem in RAG pipelines. It prevents your system from silently failing when old, authoritative facts override new, relevant truths.
+---
 
-| Domain | Query | Baseline RAG (Vector) | HalfLife Fix ✅ |
-| :--- | :--- | :--- | :--- |
-| **AI/NLP** | "Best SOTA model for NLP?" | **BERT (2018)** ❌ | **GPT-5 (2026)** ✅ |
-| **Web Dev** | "Latest React fetching logic?" | **React 16 (2017)** ❌ | **Server Components (2026)** ✅ |
-| **Python** | "Top concurrent library?" | **Gevent (2012)** ❌ | **Asyncio (2025)** ✅ |
-| **Data** | "Better library than Pandas?" | **Pandas (2008)** ❌ | **Polars (2024)** ✅ |
-| **Consensus** | "Major blockchain standard?" | **PoW (2010)** ❌ | **PoS (2024)** ✅ |
+## The Problem
 
-## ⚡ Try the Demo
-Experience the "Adversarial Win" in seconds (requires Docker):
-```bash
-halflife demo
+Standard RAG ranks by **semantic similarity**. It has no concept of time.
+
+Ask *"best method for LLM fine-tuning today?"* and your vector store returns whichever paper
+has the closest embedding — which is often a well-cited 2020 paper with clean, formal language,
+not the 2024 paper that actually answers the question.
+
+```
+Query: "Best current approach to parameter-efficient fine-tuning?"
+
+Baseline (cosine similarity):   #1 → 2020  "How fine can fine-tuning be?"     score: 0.614
+HalfLife (temporal fusion):     #1 → 2024  "DELIFT: Data Efficient LLM Fine-Tuning"  score: 0.838
 ```
 
-👉 [Full Testing & Validation SDK Guide](./TESTING.md)
+**That's a 4-year jump on a real corpus of 120 Arxiv papers. No changes to your retriever.**
 
 ---
 
-### 🚨 RAG is failing silently due to time.
-Most RAG systems are built on "Static Knowledge" assumptions. But in the real world, facts have an **expiration date**. HalfLife uses **Intent-Aware Temporal Fusion** to dynamically re-weight recency vs. authority based on the user's query.
+## Real-World Benchmark
 
-**HalfLife fixes this.** It adds a temporal ranking layer between your vector store and your LLM, ensuring you always get the **correct fact for the era.**
+Evaluated on **120 real Arxiv papers** (cs.CL, parameter-efficient fine-tuning),
+fetched year-by-year from 2019–2024. No synthetic data.
 
----
+| Query Intent | Baseline Avg Result Age | HalfLife Avg Result Age | Δ |
+|:---|:---:|:---:|:---:|
+| **Fresh** ("best current...", "state-of-the-art...") | 3.9 yr | **2.4 yr** | **−1.4 yr** |
+| **Static** ("explain how...", "what is...") | 4.3 yr | 4.0 yr | −0.3 yr ✅ no regression |
+| **Historical** ("originally...", "early NLP...") | 5.0 yr | 5.2 yr | +0.2 yr ⚠️ marginal |
 
-## 📊 3-Tier Evaluation Pipeline
+For fresh queries, HalfLife surfaces results **1.4 years more recent on average**.
+For static queries, behavior is unchanged — HalfLife is invisible when it doesn't need to act.
+Historical inversion is marginal on this corpus (2019–2024); deeper corpora show stronger results.
 
-HalfLife is validated against a **144-chunk multi-tier corpus** designed to simulate real-world RAG failure modes where semantic search fails:
+**Reproduce this yourself** — the Colab notebook fetches live Arxiv data with no setup:
 
-1.  **📄 Real-World Temporal QA**: Focuses on "SOTA" and tool versioning (e.g., React, LLM Leaderboards). Tests if the engine can bypass high-authority historical docs to surface "Current" facts.
-2.  **� The Authority Trap (Adversarial TCB)**: **This is the killer evaluation.** We ingest high-authority "Textbook-style" facts from 2018 (e.g., formal BERT descriptions) alongside low-authority "Community-style" modern truths from 2026. Standard vector search confidently picks the clean, formal (but wrong) answer. Only HalfLife's temporal fusion survives the trap.
-3.  **🧪 Adversarial Decoys**: Every relevant chunk has a "Decoy" twin with **identical text** but a mirrored timestamp. This provides 100% evidence that ranking improvements are driven by temporal signals, not just embedding bias.
-
-### **🌐 Real-World Evidence (Live Arxiv Data)**
-HalfLife includes a **`data_loader.py`** utility that pulls live metadata from the **Arxiv API**. You can fetch real-world papers on any topic (LLM Scaling, RAG, GNNs) and verify re-ranking against raw, human-authored abstracts with their actual publication history.
-
-### **Verified Results**
-| Query Intent | Baseline nDCG | HalfLife nDCG | **Improvement** |
-| :--- | :--- | :--- | :--- |
-| **Fresh** (Latest info) | 0.0487 | **0.1420** | **+191%** |
-| **Historical** (Archive) | 0.0585 | 0.0159 | (TF Match ✓) |
-| **Static** (General fact) | 0.0436 | **0.1906** | **+337%** |
-
-*Note: In Historical queries, HalfLife successfully suppressed newer results to surface specific archival data (TF 0.0027 vs 0.0052 baseline).*
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/amaydixit11/halflife/blob/main/demo/HalfLife_RealWorld_Demo.ipynb)
 
 ---
 
-## ⚙️ Core Features
+## How It Works
 
-### 🔍 1. Plug-and-Play Reranking
-HalfLife sits between your retriever (e.g., Qdrant) and your LLM. It **calibrates and re-scores** chunks using Min-Max Normalization across semantic and temporal signals.
+HalfLife sits between your vector retriever and your LLM. It re-scores each retrieved
+chunk using a weighted fusion of three signals:
 
-### ⏳ 2. Multi-Strategy Decay
-Supports modular decay functions via a central registry:
-*   **Exponential**: Standard time-based decay.
-*   **Piecewise**: Different decay rates for recent vs. historical windows.
+```
+final_score = α · vector_score + β · temporal_score + γ · trust_score
+```
 
-### 🧠 3. Intent-Aware Fusion
-Automatically classifies queries into **Fresh**, **Historical**, or **Static** intents and adapts its scoring weights ($\alpha, \beta, \gamma$) dynamically.
+The weights **α, β, γ** are set dynamically based on query intent:
 
----
+| Detected Intent | Example keywords | α (vector) | β (temporal) | γ (trust) |
+|:---|:---|:---:|:---:|:---:|
+| **Fresh** | "latest", "current", "today", "SOTA" | 0.3 | 0.6 | 0.1 |
+| **Historical** | "originally", "history of", "early" | 0.4 | 0.5 | 0.1 |
+| **Static** | "explain", "what is", "how does" | 0.8 | 0.1 | 0.1 |
 
-## 🧪 Experimental Features (Active Research)
-
-*   **Learned Decay**: A pure-NumPy MLP (`DecayMLP`) that predicts $\lambda$ from ingestion-time features.
-*   **Feedback Loop**: Adaptive parameter tuning based on user "usefulness" signals.
-*   **Event Bus**: Real-time fact supersession (e.g., newer news "hard-invalidating" old news).
-
----
-
-## 🏗️ Architecture
-
+For historical queries, the temporal signal is **inverted** — older chunks score higher.
 
 ```
 User Query
     ↓
-Intent Classifier (Fresh vs Historical)
+QueryIntentClassifier  →  sets α, β, γ
     ↓
-Vector Retrieval (Qdrant)
+Vector Retrieval (Qdrant / any store)
     ↓
-HalfLife Engine
-    ├── Score Fetch (Redis-backed)
-    ├── Learned λ Prediction (MLP)
-    └── Intent-Aware Fusion
+HalfLife Reranker
+    ├── Temporal decay per chunk  (exponential / piecewise / learned MLP)
+    ├── Redis metadata cache      (< 1ms overhead on cached chunks)
+    └── Min-Max fusion
     ↓
-Re-ranked Chunks
+Re-ranked chunks  →  LLM
 ```
 
 ---
 
-## 🛠️ Getting Started (Developer Experience)
+## Quickstart
 
-### 1. Install via Pip (Package Mode)
-HalfLife is now a standard Python package. You can install it and use the `halflife` CLI:
+### No infrastructure (2 minutes)
 
-```bash
-git clone https://github.com/amaydixit11/halflife.git
-pip install -e .
+```python
+pip install halflife-rag
 ```
-
-### 2. Launch Services
-Infrastructure is managed via Docker:
-```bash
-docker-compose up -d
-```
-
-### 3. Unified CLI
-Use the `halflife` command for all common tasks:
-```bash
-# Run the end-to-end quickstart
-halflife quickstart
-
-# Start the API server
-halflife serve --port 8000
-
-# Run evaluation benchmarks
-halflife benchmark --output results.json
-```
-
----
-
-## 🧪 Evaluation & Rigour: The Decoy Mechanism
-
-To ensure HalfLife's effectiveness, we built a **108-chunk synthetic corpus** containing "Decoys". For every relevant chunk, there is a decoy with **identical text but a different timestamp**. 
-
-Because their embeddings are identical, standard cosine similarity cannot separate them. Only HalfLife's temporal engine can correctly surface the right chunk, providing a rigorous test for your RAG pipeline's time-awareness.
-
----
-
-## 🧬 Learned Decay Workflow
-
-1.  **Collect Baseline**: Run `halflife benchmark --output run_001.json`.
-2.  **Train the MLP**: Run `halflife train --results run_001.json`.
-3.  **Deploy**: The engine automatically loads `decay_mlp.npz` and starts predicting $\lambda$ for all new ingested chunks.
-
----
-
-## 🧩 Status & Roadmap
-*   [x] **Phase 1**: Core Decay Engine & Redis Metadata Store.
-*   [x] **Phase 2**: Intent-Aware Fusion & Historical Inversion.
-*   [x] **Phase 3**: Learned Decay MLP & Benchmark Harness.
-*   [ ] **Phase 4**: Event-Driven Fact Supersession (In Progress).
-*   [ ] **Phase 5**: Multi-Vector Store SDKs (Pinecone, Weaviate).
-
----
-
-## ⚡ Python SDK (The 2-Line Integration)
-
-HalfLife is designed to be **invisible** until you need it. You don't have to rewrite your RAG pipeline—just wrap your results.
 
 ```python
 from halflife import HalfLife
 
-# 1. Initialize
 hl = HalfLife()
 
-# 2. Rerank your existing Qdrant/Pinecone results
-# Before: results = qdrant.search(query=query)
-# After:
+# Drop into your existing retrieval results
 results = qdrant.search(query=query)
 reranked = hl.rerank(query=query, chunks=results, top_k=5)
 
 for chunk in reranked:
-    print(f"[{chunk['score']:.2f}] {chunk['payload']['text']}")
+    print(f"[{chunk['final_score']:.3f}] ({chunk['timestamp'][:4]}) {chunk['text'][:80]}")
+```
+
+### With Docker (full feature set including Redis cache)
+
+```bash
+git clone https://github.com/amaydixit11/halflife.git
+cd halflife
+docker-compose up -d   # starts Qdrant + Redis
+pip install -e .
+halflife demo          # runs the adversarial demo
 ```
 
 ---
 
-## 🏁 Zero-Friction Demo
+## LangChain Integration
 
-Experience the "Temporal Travel" win in seconds. This demo ingests conflicting facts (Bill Gates 2000 vs Satya Nadella 2026) and proves HalfLife's ability to "look back" for historical queries.
+```python
+from langchain.retrievers import ContextualCompressionRetriever
+from halflife.integrations.langchain import HalfLifeReranker
 
-```bash
-halflife demo
+retriever = ContextualCompressionRetriever(
+    base_compressor=HalfLifeReranker(top_k=5),
+    base_retriever=your_existing_retriever   # unchanged
+)
+
+docs = retriever.get_relevant_documents("Latest approach to LLM fine-tuning?")
+# → surfaces 2024 papers instead of 2020 papers
 ```
 
-### 🦙 LlamaIndex (BaseNodePostprocessor)
-Plug HalfLife directly into your LlamaIndex QueryEngine.
+## LlamaIndex Integration
 
 ```python
 from halflife.integrations.llamaindex import HalfLifePostprocessor
 
-# 1. Initialize Postprocessor
-postprocessor = HalfLifePostprocessor(top_n=3)
-
-# 2. Add to your existing query engine
 query_engine = index.as_query_engine(
-    similarity_top_k=10,
-    node_postprocessors=[postprocessor]
+    similarity_top_k=20,
+    node_postprocessors=[HalfLifePostprocessor(top_n=5)]
 )
 
-# 3. Fix temporal hallucinations
 response = query_engine.query("What is the latest React version?")
 ```
 
 ---
 
-## 📄 License & Contributing
-MIT License. Contributions are welcome for new decay functions and integration plugins!
+## Decay Strategies
+
+Three decay functions are available, selectable per document at ingestion time:
+
+| Strategy | Formula | Best for |
+|:---|:---|:---|
+| **Exponential** | `e^(−λΔt)` | News, fast-moving fields, software versions |
+| **Piecewise** | Step function (1.0 → 0.7 → 0.3) | Documentation, compliance, versioned specs |
+| **Learned** | MLP-predicted λ from doc features | Mixed corpora with feedback signal |
+
+The learned decay MLP runs **at ingestion time only** — zero ML inference at query time.
+
+---
+
+## Experimental Features
+
+- **Learned Decay MLP** — pure-NumPy, predicts per-chunk λ from doc type, source domain, text length, and feedback ratio. Train on your own benchmark results with `halflife train`.
+- **Feedback Loop** — adaptive λ tuning via EMA from user "was this useful?" signals.
+- **Event Bus** — hard/soft invalidation when a fact is superseded (e.g. a retraction, a product discontinuation).
+
+---
+
+## CLI
+
+```bash
+halflife demo                              # adversarial demo (no Docker)
+halflife quickstart                        # end-to-end ingest → query → rerank
+halflife benchmark --output results.json   # nDCG / MRR / temporal freshness
+halflife evaluate --ablation               # compare exponential / linear / learned / baseline
+halflife train --results results.json      # train the decay MLP
+halflife serve --port 8000                 # start the FastAPI middleware
+```
+
+---
+
+## Roadmap
+
+- [x] Phase 1: Core decay engine + Redis metadata store
+- [x] Phase 2: Intent-aware fusion + historical inversion
+- [x] Phase 3: Learned decay MLP + benchmark harness
+- [x] Phase 3.5: Real-world Arxiv validation + Colab notebook
+- [ ] Phase 4: Event-driven fact supersession
+- [ ] Phase 5: Pinecone, Weaviate, Chroma integrations
+- [ ] Phase 6: Transformer-based intent classifier (replace keyword matching)
+
+---
+
+## License & Contributing
+
+MIT License. Contributions welcome — especially new decay functions, vector store integrations,
+and domain-specific benchmark datasets.
+
+If you're using HalfLife in a project, open an issue and let us know — we'd like to link to it.
