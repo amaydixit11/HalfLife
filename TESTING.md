@@ -1,6 +1,6 @@
 # 🧪 Testing & Validation Guide
 
-This guide outlines how to verify HalfLife's temporal reranking logic across three layers: Viral Proof, Scientific IR Metrics, and Unit Integrity.
+This guide outlines how to verify HalfLife's temporal reranking logic across three layers: Proof, Scientific IR Metrics, and Unit Integrity.
 
 ## 🏗️ 0. Prerequisites
 Ensure your infrastructure is running:
@@ -8,7 +8,7 @@ Ensure your infrastructure is running:
 docker-compose up -d qdrant redis
 ```
 
-## 🎭 1. The Viral Proof (Adversarial Sweep)
+## 🎭 1. The Proof (Adversarial Sweep)
 Run the E2E demo to see HalfLife defeat the **"Authority Trap"** across 5 domains (AI, Web, Python, Consensus, Data).
 ```bash
 halflife demo

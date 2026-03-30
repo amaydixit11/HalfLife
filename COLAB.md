@@ -15,8 +15,7 @@ Run this in a Colab cell to install the necessary services without Docker:
 !tar -xf qdrant-x86_64-unknown-linux-gnu.tar.gz
 !nohup ./qdrant > qdrant.log 2>&1 &
 
-# 3. Install HalfLife from Source
-!pip install -e .
+# 3. Install Dependencies
 !pip install -q rich sentence-transformers qdrant-client redis typer
 ```
 
