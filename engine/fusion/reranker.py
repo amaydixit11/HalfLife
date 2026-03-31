@@ -5,6 +5,7 @@ from typing import Optional
 from engine.decay.registry import get_decay
 from engine.fusion.consistency import TemporalConsistencyChecker
 from engine.store.redis_store import RedisStore
+from engine.temporal.extractor import TemporalExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class Reranker:
     def __init__(self, store: RedisStore):
         self.store   = store
         self.checker = TemporalConsistencyChecker()
+        self.extractor = TemporalExtractor()
 
     # ------------------------------------------------------------------ #
     #  Public interface                                                   #
@@ -103,35 +105,23 @@ class Reranker:
             chunk_id     = r.get("id")
             payload      = r.get("payload", {})
             vector_score = r.get("score")
-            trust_score  = 0.5  # ROBUSTNESS: Default initialization
             
-            # --- ROBUSTNESS: Metadata & Intent Handling ---
-            raw_ts = payload.get("timestamp")
+            # --- Temporal Inference Pipeline ---
+            ts, explicit_trust = self.extractor.resolve_timestamp({"payload": payload})
             
-            if not raw_ts:
-                # MESSY REALITY: Infer date from text if metadata is missing
-                import re
-                text_snippet = payload.get("text", "")[:500]
-                # Look for years like 2024, 2025, etc.
-                year_match = re.search(r"\b(19\d{2}|20[0-2]\d|2030)\b", text_snippet)
-                if year_match:
-                    ts = datetime(int(year_match.group(1)), 1, 1, tzinfo=timezone.utc)
-                    # We give inferred dates a slightly lower trust score
-                    trust_score = 0.4
-                    decay_fn = get_decay("exponential", {}) # Default to exponential
-                    temporal = decay_fn.compute(timestamp=ts, now=now)
-                else:
-                    # Neutral fallback if absolutely no date found
-                    ts = None 
-                    temporal = 0.5
+            if ts is None:
+                # 3. Neutral fallback when absolutely no date found anywhere
+                temporal = 0.5
+                trust_score = 0.4
             else:
-                ts = self._parse_timestamp(raw_ts, chunk_id, now)
-                
                 # Metadata-driven decay selection
                 metadata = self.store.get_chunk(chunk_id)
                 d_type   = metadata.get("decay_type", "exponential") if metadata else "exponential"
                 d_params = metadata.get("decay_params", {}) if metadata else {}
-                trust_score = metadata.get("trust_score", 0.5) if metadata else 0.5
+                
+                # Fetch baseline trust and explicitly combine with extraction confidence
+                base_trust = metadata.get("trust_score", 0.5) if metadata else 0.5
+                trust_score = base_trust * explicit_trust
                 
                 # --- RESEARCH: Support Neural Lambda Overrides ---
                 if "lambda" in weights:
