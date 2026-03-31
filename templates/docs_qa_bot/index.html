@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HalfLife | Temporal Docs Search</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #0a0c10;
+            --bg-surface: #12161b;
+            --primary: #4f46e5;
+            --primary-glow: rgba(79, 70, 229, 0.3);
+            --fresh: #10b981;
+            --stale: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #1e293b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: var(--bg-deep); 
+            color: var(--text-main); 
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        .orb {
+            position: fixed;
+            width: 400px; height: 400px;
+            background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+            top: -200px; left: -200px;
+            z-index: -1;
+            filter: blur(100px);
+        }
+
+        header {
+            width: 100%; max-width: 1000px;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 2.5rem; font-weight: 600;
+            letter-spacing: -0.05em;
+            background: linear-gradient(to right, #818cf8, #4f46e5);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .subtitle { color: var(--text-muted); font-size: 1.1rem; }
+
+        .search-container {
+            width: 100%; max-width: 700px;
+            background: var(--bg-surface);
+            padding: 8px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            display: flex; gap: 8px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+            margin-bottom: 40px;
+            transition: all 0.3s ease;
+        }
+        .search-container:focus-within { border-color: var(--primary); box-shadow: 0 0 16px var(--primary-glow); }
+
+        input {
+            flex: 1; background: transparent; border: none;
+            color: white; font-size: 1.1rem; padding: 12px 16px;
+            outline: none;
+        }
+
+        button {
+            background: var(--primary); color: white;
+            padding: 12px 24px; border-radius: 10px;
+            border: none; cursor: pointer; font-weight: 600;
+            transition: 0.2s;
+        }
+        button:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+        .dashboard {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 32px; width: 100%; max-width: 1100px; padding: 0 20px 80px;
+        }
+
+        .panel { background: var(--bg-surface); border-radius: 20px; border: 1px solid var(--border); padding: 24px; }
+        .panel h2 { font-size: 1.1rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
+        .panel.baseline h2::before { content: '⚠️'; }
+        .panel.halflife h2 { color: var(--fresh); }
+        .panel.halflife h2::before { content: '⏱️'; }
+
+        .card {
+            background: rgba(255,255,255,0.03); 
+            border-radius: 12px; padding: 16px; margin-bottom: 16px;
+            border: 1px solid transparent; transition: 0.2s;
+        }
+        .card:hover { border-color: var(--border); background: rgba(255,255,255,0.05); }
+        .card-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.85rem; }
+        .badge { padding: 4px 8px; border-radius: 6px; font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; text-transform: uppercase; }
+        .badge.outdated { background: rgba(239,68,68,0.1); color: var(--stale); }
+        .badge.fresh { background: rgba(16,185,129,0.1); color: var(--fresh); }
+        .card-content { line-height: 1.6; font-size: 0.95rem; color: var(--text-main); }
+        .card-score { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; }
+
+        @media (max-width: 900px) { .dashboard { grid-template-columns: 1fr; } }
+
+        /* Animation for results */
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .card { animation: slideUp 0.4s ease forwards; opacity: 0; }
+    </style>
+</head>
+<body>
+    <div class="orb"></div>
+    <header>
+        <div class="logo">HalfLife Integration</div>
+        <p class="subtitle">System Prototype: Temporal Research & Documentation Agent</p>
+    </header>
+
+    <div class="search-container">
+        <input type="text" id="query" placeholder="Ask about system documentation evolution..." value="Best way to handle state in React today?">
+        <button onclick="runInference()">Analyze Relevancy</button>
+    </div>
+
+    <div class="dashboard">
+        <div class="panel baseline">
+            <h2>Standard Vector Baseline</h2>
+            <div id="baseline-results">
+                <!-- Chunks added dynamic -->
+            </div>
+        </div>
+
+        <div class="panel halflife">
+            <h2>HalfLife Chronological Fusion</h2>
+            <div id="halflife-results">
+                <!-- Chunks added dynamic -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MOCK_DATA = [
+            { year: 2016, text: "Redux is the industry-proven standard for state containers in React. Connect your components using connect() and applyMiddleware.", source: "stackoverflow", score: 0.96 },
+            { year: 2022, text: "Zustand provides a minimal, hooks-based state management that eliminates Redux boilerplate for 2022 applications.", source: "github_trending", score: 0.87 },
+            { year: 2024, text: "React 19 Server Components and the 'use' hook provide native async context resolution, reducing client-side state reliance.", source: "beta_docs", score: 0.82 }
+        ];
+
+        function runInference() {
+            clearResults();
+            
+            // 1. Fill Baseline (Simulated Vector Search)
+            const sortedBaseline = [...MOCK_DATA].sort((a,b) => b.score - a.score);
+            const baselineContainer = document.getElementById('baseline-results');
+            sortedBaseline.forEach((item, i) => {
+                const card = createCard(item, i, false);
+                card.style.animationDelay = `${i * 0.1}s`;
+                baselineContainer.appendChild(card);
+            });
+
+            // 2. Fill HalfLife (Simulated Temporal Correction)
+            // Logic: Inversely weigh earlier results based on 'today' intent
+            const sortedHL = [...MOCK_DATA].sort((a,b) => b.year - a.year);
+            const hlContainer = document.getElementById('halflife-results');
+            sortedHL.forEach((item, i) => {
+                const card = createCard(item, i, true);
+                card.style.animationDelay = `${(i + 3) * 0.1}s`;
+                hlContainer.appendChild(card);
+            });
+        }
+
+        function createCard(item, rank, isHL) {
+            const div = document.createElement('div');
+            div.className = 'card';
+            
+            const isFresh = item.year >= 2024;
+            const badgeClass = isFresh ? 'fresh' : 'outdated';
+            const badgeText = isFresh ? 'Fresh' : 'Legacy / Stable';
+
+            div.innerHTML = `
+                <div class="card-header">
+                    <span class="badge ${badgeClass}">${item.year} | ${badgeText}</span>
+                    <span style="color: var(--text-muted)">${item.source}</span>
+                </div>
+                <div class="card-content">${item.text}</div>
+                <div class="card-score">
+                    Ranked #${rank+1} ${isHL ? '— Temporal BoostApplied' : '— Raw Semantic Score'}
+                </div>
+            `;
+            return div;
+        }
+
+        function clearResults() {
+            document.getElementById('baseline-results').innerHTML = '';
+            document.getElementById('halflife-results').innerHTML = '';
+        }
+
+        // Run on load
+        window.onload = runInference;
+    </script>
+</body>
+</html>
