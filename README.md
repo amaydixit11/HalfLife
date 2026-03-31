@@ -4,6 +4,15 @@
 
 **Temporal-aware reranking for RAG pipelines. Stops your system from returning outdated answers.**
 
+> 🚨 **RAG systems return outdated answers.**
+> 
+> Query: `"best NLP model today"`
+> 
+> ❌ Without HalfLife: **#1 BERT (2019)**
+> ✅ With HalfLife: **#1 GPT-4 (2024)**
+> 
+> I built a drop-in layer that fixes this. **[See LlamaIndex Demo](./examples/llamaindex_halflife_demo.py)** ↓
+
 [![PyPI](https://img.shields.io/pypi/v/halflife-rag)](https://pypi.org/project/halflife-rag/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/amaydixit11/halflife/blob/main/HalfLife_RealWorld_Demo.ipynb)
