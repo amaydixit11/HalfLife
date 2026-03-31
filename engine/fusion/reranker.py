@@ -171,7 +171,7 @@ class Reranker:
                 "vector_score":   round(r["v"], 6),
                 "temporal_score": round(r["t"], 10), # Precision for debug
                 "trust_score":    round(r["tr"], 6),
-                "timestamp":      r["p"].get("timestamp"),
+                "timestamp":      r["ts"],  # Include the dynamically extracted timestamp bound to this current result
                 "text":           r["p"].get("text", "---"),
             })
 

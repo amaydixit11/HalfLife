@@ -75,6 +75,13 @@ class HalfLifePostprocessor(BaseNodePostprocessor):
             node_with_score.node.metadata["halflife_rank"] = rank_idx + 1
             node_with_score.node.metadata["temporal_score"] = res["temporal_score"]
             
+            # Export the exact inferred timestamp for debugging / visibility
+            ts = res.get("timestamp")
+            if ts:
+                node_with_score.node.metadata["inferred_year"] = str(ts.year) if hasattr(ts, "year") else str(ts)[:4]
+            else:
+                node_with_score.node.metadata["inferred_year"] = "None"
+            
             reranked_nodes.append(node_with_score)
 
         return reranked_nodes
