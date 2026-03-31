@@ -89,16 +89,6 @@ class Reranker:
         # ------------------------------------------------------------------ #
 
         
-        # 1. First pass: compute raw scores (or use cache)
-        raw_results = []
-        for chunk in chunks:
-            chunk_id     = chunk.get("id")
-            vector_score = chunk.get("score", 0.0)
-            payload      = chunk.get("payload", {})
-            if not chunk_id: continue
-
-            cache_key = f"{chunk_id}:{intent or 'none'}"
-            cached    = self.store.get_cached_score(cache_key)
         start_compute = datetime.now()
         raw_results = []
         for r in chunks:
@@ -171,7 +161,7 @@ class Reranker:
                 "vector_score":   round(r["v"], 6),
                 "temporal_score": round(r["t"], 10), # Precision for debug
                 "trust_score":    round(r["tr"], 6),
-                "timestamp":      r["ts"],  # Include the dynamically extracted timestamp bound to this current result
+                "inferred_year":  str(r["ts"].year) if r["ts"] and hasattr(r["ts"], "year") else "None",
                 "temporal_source":r["src"],
                 "text":           r["p"].get("text", "---"),
             })

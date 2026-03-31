@@ -1,7 +1,7 @@
 """
 learned_model.py — MLP that predicts a per-chunk decay constant λ.
 
-Architecture: Option A (chunk-level λ predictor).
+Architecture: chunk-level λ predictor.
 
 The model takes features known at ingestion time and outputs λ,
 which is then stored in Redis as the chunk's decay parameter.
