@@ -69,7 +69,7 @@ class HalfLifePostprocessor(BaseNodePostprocessor):
 
         # Map back to LlamaIndex NodeWithScore objects
         reranked_nodes = []
-        for rank_idx, res in enumerate(results):
+        for rank_idx, res in enumerate(results["reranked_chunks"]):
             # Find the original node securely by ID mapping
             node_with_score = id_to_node[res["id"]]
             

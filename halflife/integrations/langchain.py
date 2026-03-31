@@ -63,7 +63,7 @@ class HalfLifeReranker(BaseDocumentCompressor):
 
         # Map back to LangChain Documents
         reranked_docs = []
-        for rank_idx, res in enumerate(results):
+        for rank_idx, res in enumerate(results["reranked_chunks"]):
             # Find the original doc by indexing (HACK: we stored id as lc-i)
             orig_idx = int(res["id"].split("-")[1])
             doc = documents[orig_idx]

@@ -26,7 +26,7 @@ class HalfLife:
         self.reranker = Reranker(self.store)
         self.classifier = QueryIntentClassifier()
         self.ingestor = HalfLifeIngestor(qdrant_url=qdrant_url, redis_url=redis_url, client=qdrant_client)
-    def rerank(self, query: str, chunks: List[Dict], intent: Optional[str] = None, top_k: int = 5):
+    def rerank(self, query: str, chunks: List[Dict], intent: Optional[str] = None, weights: Optional[Dict[str, float]] = None, top_k: int = 5):
         """
         Rerank standard vector search hits using temporal fusion.
         
@@ -34,29 +34,35 @@ class HalfLife:
             query: The user's natural language query.
             chunks: A list of dicts (or Qdrant ScoredPoints) with "id" and "score".
             intent: Optional intent override (e.g. "latest", "historical").
+            weights: Optional custom weight overrides (e.g. {"vector": 0.5, "temporal": 0.5}).
             top_k: Number of results to return.
         """
         # Normalization: Handle ScoredPoints or other objects from Qdrant/Pinecone/LangChain
         normalized_chunks = []
         for c in chunks:
             if hasattr(c, "id") and hasattr(c, "score"):
+                # Handle Qdrant ScoredPoint objects seamlessly
+                payload = getattr(c, "payload", {}) if getattr(c, "payload") is not None else {}
                 normalized_chunks.append({
                     "id":      str(getattr(c, "id")),
                     "score":   getattr(c, "score"),
-                    "payload": getattr(c, "payload", {})
+                    "payload": payload
                 })
             else:
                 normalized_chunks.append(c)
 
-        if intent:
+        # 1. Determine Intent / Weights
+        if weights:
+            classification = {"intent": intent or "custom", "weights": weights}
+        elif intent:
             if intent not in self.classifier.intent_weights:
                 raise ValueError(f"Invalid intent: '{intent}'. Must be one of: {list(self.classifier.intent_weights.keys())}")
-            weights = self.classifier.intent_weights[intent]
-            classification = {"intent": intent, "weights": weights}
+            classification = {"intent": intent, "weights": self.classifier.intent_weights[intent]}
         else:
             # Use automatic classification
             classification = self.classifier.classify(query)
 
+        # 2. Execute Fusion Reranking
         result = self.reranker.rerank(
             query=query,
             chunks=normalized_chunks,
@@ -64,7 +70,9 @@ class HalfLife:
             weights=classification["weights"],
             top_k=top_k
         )
-        return result["reranked_chunks"]
+        
+        # Return full dictionary for API/Integration compatibility, but support simple list access
+        return result
 
     def ingest(self, text: str, timestamp: str, doc_type: str = "generic"):
         """

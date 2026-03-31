@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List
 
 # Add project root to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from halflife import HalfLife
 
 class ResearchAssistant:
