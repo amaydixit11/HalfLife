@@ -11,7 +11,7 @@
 > ❌ Without HalfLife: **#1 BERT (2019)**
 > ✅ With HalfLife: **#1 GPT-4 (2024)**
 > 
-> I built a drop-in layer that fixes this. **[See LlamaIndex Demo](./examples/llamaindex_halflife_demo.py)** ↓
+> **HalfLife is a drop-in middleware layer that resolves this temporal relevance gap.** **[Explore the Integration Demo](./examples/llamaindex_halflife_demo.py)** ↓
 
 [![PyPI](https://img.shields.io/pypi/v/halflife-rag)](https://pypi.org/project/halflife-rag/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)

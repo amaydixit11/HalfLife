@@ -17,10 +17,10 @@ from halflife.integrations.llamaindex import HalfLifePostprocessor
 
 logging.basicConfig(level=logging.ERROR)
 
-def main():
-    print("\n=======================================================")
-    print(" 💥 THE 'MESSY CORPUS' DEMO: React Docs vs StackOverflow")
-    print("=======================================================\n")
+def run_temporal_relevance_demo():
+    print("-------------------------------------------------------")
+    print(" UNSTRUCTURED CORPUS DEMO: Knowledge Evolution (React)")
+    print("-------------------------------------------------------\n")
     
     query_str = "What is the best way to manage state in React today?"
     query_bundle = QueryBundle(query_str=query_str)
@@ -61,13 +61,13 @@ def main():
     
     baseline_top = baseline_nodes[0]
     
-    print("\n⚠️ Why baseline failed:")
+    print("\nAnalysis of Baseline Limitations:")
     print("   → 'Redux' matched query semantically")
     print("   → But it ignored that it's outdated (2018)\n")
     
-    print("2️⃣  HalfLife (Temporal Inference & Confidence Scoring)")
+    print("Temporal Inference & Confidence Scoring")
     print("---------------------------------------------------------")
-    print("💡 Why this works:")
+    print("Methodology:")
     print("   • Baseline ignores time completely")
     print("   • HalfLife extracts time from raw text")
     print("   • Then reweights relevance using temporal decay\n")
@@ -80,7 +80,7 @@ def main():
         h_node = reranked_nodes[i].node.get_content()
         
         if "Redux" in b_node:
-            b_str = "Redux (2018) ❌"
+            b_str = "Redux (2018)"
         elif "Zustand" in b_node:
             b_str = "Zustand (2022)"
         else:
@@ -95,7 +95,7 @@ def main():
             
         print(f"#{i+1}   | {b_str:<33} | {h_str}")
         
-    print("\n💡 Under the hood: HalfLife automatically inferred missing timestamps from unstructured text:")
+    print("\nTechnical Breakdown: HalfLife automated temporal inference for unstructured segments:")
     for n in reranked_nodes:
         inferred = n.node.metadata.get("inferred_year")
         src = n.node.metadata.get("temporal_source", "unknown")
@@ -104,4 +104,4 @@ def main():
     print("\n")
 
 if __name__ == "__main__":
-    main()
+    run_temporal_relevance_demo()

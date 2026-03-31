@@ -31,7 +31,7 @@ def build_adversarial_tcb():
     """
     now = datetime.now(timezone.utc)
     
-    # 10 KILLER QUERIES
+    # 10 EVALUATION QUERIES
     dataset = [
         {
             "query": "What is the state-of-the-art model for NLP tasks today?",

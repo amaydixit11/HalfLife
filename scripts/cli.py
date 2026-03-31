@@ -90,7 +90,7 @@ def main():
         quickstart_main()
 
     elif args.command == "demo":
-        from scripts.demo import run_viral_demo as run_demo
+        from scripts.demo import run_demo as run_demo
         run_demo()
 
     else:
