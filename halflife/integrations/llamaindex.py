@@ -39,13 +39,17 @@ class HalfLifePostprocessor(BaseNodePostprocessor):
 
         # Convert LlamaIndex Nodes to HalfLife chunk format
         hl_chunks = []
+        id_to_node = {}
         for i, node_with_score in enumerate(nodes):
             node = node_with_score.node
             score = node_with_score.score or 0.9 # Default to high if not provided
             
+            chunk_id = f"li-{i}"
+            id_to_node[chunk_id] = node_with_score
+            
             # Extract metadata and apply 'Messy Reality' fallback if missing
             hl_chunks.append({
-                "id": f"li-{i}",
+                "id": chunk_id,
                 "score": score,
                 "payload": {
                     "text": node.get_content(),
@@ -66,14 +70,14 @@ class HalfLifePostprocessor(BaseNodePostprocessor):
         # Map back to LlamaIndex NodeWithScore objects
         reranked_nodes = []
         for rank_idx, res in enumerate(results):
-            # Find the original node by indexing (HACK: we stored id as li-i)
-            orig_idx = int(res["id"].split("-")[1])
-            node_with_score = nodes[orig_idx]
+            # Find the original node securely by ID mapping
+            node_with_score = id_to_node[res["id"]]
             
             # Update score and metadata for visibility in debug logs
             node_with_score.score = res["final_score"]
             node_with_score.node.metadata["halflife_rank"] = rank_idx + 1
             node_with_score.node.metadata["temporal_score"] = res["temporal_score"]
+            node_with_score.node.metadata["temporal_source"] = res.get("temporal_source", "unknown")
             
             # Export the exact inferred timestamp for debugging / visibility
             ts = res.get("timestamp")

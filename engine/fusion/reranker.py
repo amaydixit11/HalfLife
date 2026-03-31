@@ -107,7 +107,7 @@ class Reranker:
             vector_score = r.get("score")
             
             # --- Temporal Inference Pipeline ---
-            ts, explicit_trust = self.extractor.resolve_timestamp({"payload": payload})
+            ts, explicit_trust, source = self.extractor.resolve_timestamp({"payload": payload})
             
             if ts is None:
                 # 3. Neutral fallback when absolutely no date found anywhere
@@ -135,7 +135,7 @@ class Reranker:
                 temporal = 1.0 - temporal
             
             raw_results.append({
-                "id": chunk_id, "v": vector_score, "t": temporal, "tr": trust_score, "p": payload, "ts": ts
+                "id": chunk_id, "v": vector_score, "t": temporal, "tr": trust_score, "p": payload, "ts": ts, "src": source
             })
 
         # --- Latency Tracking ---
@@ -172,6 +172,7 @@ class Reranker:
                 "temporal_score": round(r["t"], 10), # Precision for debug
                 "trust_score":    round(r["tr"], 6),
                 "timestamp":      r["ts"],  # Include the dynamically extracted timestamp bound to this current result
+                "temporal_source":r["src"],
                 "text":           r["p"].get("text", "---"),
             })
 

@@ -59,6 +59,19 @@ def main():
     )
     reranked_nodes.sort(key=lambda x: x.score, reverse=True)
     
+    baseline_top = baseline_nodes[0]
+    
+    print("\n⚠️ Why baseline failed:")
+    print("   → 'Redux' matched query semantically")
+    print("   → But it ignored that it's outdated (2018)\n")
+    
+    print("2️⃣  HalfLife (Temporal Inference & Confidence Scoring)")
+    print("---------------------------------------------------------")
+    print("💡 Why this works:")
+    print("   • Baseline ignores time completely")
+    print("   • HalfLife extracts time from raw text")
+    print("   • Then reweights relevance using temporal decay\n")
+    
     print("Rank | Baseline (Standard RAG)           | HalfLife (Temporal Inference)")
     print("---------------------------------------------------------------------------------")
     
@@ -85,8 +98,9 @@ def main():
     print("\n💡 Under the hood: HalfLife automatically inferred missing timestamps from unstructured text:")
     for n in reranked_nodes:
         inferred = n.node.metadata.get("inferred_year")
+        src = n.node.metadata.get("temporal_source", "unknown")
         content = n.node.get_content()
-        print(f"   [{n.score:.3f}] (inferred_year={inferred}) {content[:65]}...")
+        print(f"   [{n.score:.3f}] (year={inferred}, source={src}) {content[:65]}...")
     print("\n")
 
 if __name__ == "__main__":

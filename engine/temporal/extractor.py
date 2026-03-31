@@ -18,7 +18,7 @@ class TemporalExtractor:
         # Year only fallback (e.g., 2019, 2024)
         self.year_pattern = re.compile(r"\b(20[0-2]\d|19\d{2})\b")
 
-    def resolve_timestamp(self, chunk: dict) -> Tuple[Optional[datetime], float]:
+    def resolve_timestamp(self, chunk: dict) -> Tuple[Optional[datetime], float, str]:
         """
         Dynamically extracts a timestamp + confidence interval from a chunk.
         
@@ -26,7 +26,7 @@ class TemporalExtractor:
             chunk: The chunk payload dictionary
             
         Returns:
-            (datetime, float): The inferred datetime and a confidence score [0.0 - 1.0]
+            (datetime, confidence_score, source_type)
         """
         payload = chunk.get("payload", {})
         text = payload.get("text", "")
@@ -39,7 +39,7 @@ class TemporalExtractor:
                 ts = datetime.fromisoformat(str(raw_ts))
                 if ts.tzinfo is None:
                     ts = ts.replace(tzinfo=timezone.utc)
-                return ts, 1.0  # Perfect strict metadata confidence
+                return ts, 1.0, "metadata" # Perfect strict metadata confidence
             except ValueError:
                 # If un-parseable, we degrade gracefully to text extraction
                 pass
@@ -50,7 +50,7 @@ class TemporalExtractor:
         if exact_match:
             try:
                 year, month, day = map(int, exact_match.groups())
-                return datetime(year, month, day, tzinfo=timezone.utc), 0.8
+                return datetime(year, month, day, tzinfo=timezone.utc), 0.8, "explicit_text"
             except ValueError:
                 pass
 
@@ -58,8 +58,8 @@ class TemporalExtractor:
         year_match = self.year_pattern.search(text)
         if year_match:
             year = int(year_match.group(1))
-            return datetime(year, 1, 1, tzinfo=timezone.utc), 0.6  # Approximate confidence
+            return datetime(year, 1, 1, tzinfo=timezone.utc), 0.6, "loose_year"
             
         # 3. Default Heuristics / Final Fallback
         # When absolutely no temporal signal exists on the chunk
-        return None, 0.4
+        return None, 0.4, "fallback"
